@@ -6,6 +6,8 @@ import { blurActive } from '../ui/StartScreen';
 import { TimeOfDay } from '../ui/TimeOfDay';
 import { useSun } from '../world/sun';
 import { setSfDebugError, setSfDebugWorld } from './debug';
+import { usePreview } from './preview';
+import { PreviewButton, PreviewOverlay } from './PreviewOverlay';
 import { flySf, prepareSf, type SfWorld } from './session';
 
 /** Data credits for the argus city (public/sf/data/SOURCES.md). */
@@ -33,6 +35,7 @@ function useFlyKeys(world: SfWorld | null, active: boolean): void {
  * drone. Boots the city and its collision trees behind the loading screen, then takes off from
  * Ferry Building Plaza with the usual HUD and time-of-day control. Esc hands the camera to
  * argus's orbit controls (drag / right-drag / scroll); T, Enter or the button flies again.
+ * Preview (P) plays the hard-coded Ferry Building flight plan (preview.ts).
  */
 export const SfApp: FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -43,6 +46,7 @@ export const SfApp: FC = () => {
   const phase = useFlytake((s) => s.phase);
   const dronePreparing = useFlytake((s) => s.dronePreparing);
   const droneSite = useFlytake((s) => s.droneSite);
+  const previewing = usePreview((s) => s.active);
   /** the first drone is ready: the loading screen is done (later flights use the blackout) */
   const [revealed, setRevealed] = useState(false);
 
@@ -83,7 +87,7 @@ export const SfApp: FC = () => {
     });
   }, [world]);
 
-  const orbit = world != null && phase === 'free';
+  const orbit = world != null && phase === 'free' && !previewing;
   useFlyKeys(world, orbit);
 
   const onFly = () => {
@@ -115,7 +119,9 @@ export const SfApp: FC = () => {
       </div>
 
       <DroneHud />
-      <TimeOfDay />
+      {!previewing && <TimeOfDay />}
+      {revealed && <PreviewButton world={world} />}
+      <PreviewOverlay world={world} />
       <p className="sf-credits" data-visible={!loading}>
         {CREDITS}
       </p>

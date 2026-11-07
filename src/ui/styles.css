@@ -1098,7 +1098,6 @@ body,
 }
 
 .dh-agl {
-  grid-column: 1 / -1;
   opacity: 0.85;
 }
 
@@ -1478,4 +1477,134 @@ body,
 .sf-loader {
   /* above the blackout and the drone-preparing note: one screen until the first drone frame */
   z-index: 27;
+}
+
+/* ------------------------------------------------- San Francisco preview */
+
+.sf-preview-button {
+  position: absolute;
+  top: 66px;
+  left: var(--edge);
+  /* above the drone HUD and the time panel, under the blackout */
+  z-index: 13;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sf-preview-button[data-visible='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sf-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.sf-preview[data-visible='true'] {
+  visibility: visible;
+}
+
+.sf-preview-plan {
+  position: absolute;
+  left: var(--edge);
+  top: calc(var(--bar-h) + 28px);
+  /* readable over the bright bay in the overview */
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s var(--ease-out);
+}
+
+.sf-preview[data-visible='true'][data-stage='overview'] .sf-preview-plan {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.5s;
+}
+
+.sf-preview-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.sf-preview-title {
+  margin: 0;
+  font: 400 44px/1 var(--serif);
+}
+
+.sf-preview-meta {
+  margin: 10px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.sf-preview-foot {
+  position: absolute;
+  left: var(--edge);
+  right: var(--edge);
+  bottom: max(14px, calc(var(--bar-h) / 2 - 12px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.sf-preview[data-visible='true'] .sf-preview-foot {
+  opacity: 1;
+  transition-delay: 0.9s;
+}
+
+.sf-preview-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sf-preview-exit {
+  pointer-events: auto;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  letter-spacing: inherit;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.sf-preview-exit:hover {
+  border-color: var(--muted);
+}
+
+.sf-preview-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 1px;
+  background: var(--hair);
+}
+
+.sf-preview-progress > i {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left center;
 }

@@ -7,7 +7,8 @@
  * height), velocity is local East-North-Up, so it works anywhere on the globe.
  *
  * Stick conventions (Mode 2 remote): throttle + = climb, yaw + = turn right (clockwise),
- * pitch + = forward, roll + = right. All sticks are in [-1, 1].
+ * pitch + = forward, roll + = right. All sticks are in [-1, 1]. The gimbal dial is a rate
+ * control: + tilts the camera up, - down, and it holds its angle when released.
  */
 import { WGS84_A, WGS84_E2, wrap360, type Geodetic } from '../geo/wgs84';
 import { DRONE, MODES, type FlightMode } from './specs';
@@ -22,9 +23,11 @@ export interface Sticks {
   yaw: number;
   pitch: number;
   roll: number;
+  /** gimbal dial: + tilts the camera up, - down */
+  gimbal: number;
 }
 
-export const neutralSticks = (): Sticks => ({ throttle: 0, yaw: 0, pitch: 0, roll: 0 });
+export const neutralSticks = (): Sticks => ({ throttle: 0, yaw: 0, pitch: 0, roll: 0, gimbal: 0 });
 
 export interface DroneWarnings {
   heightLimit: boolean;
@@ -51,6 +54,8 @@ export interface DroneState extends Geodetic {
   airborneSeconds: number;
   crashSeconds: number;
   warnings: DroneWarnings;
+  /** camera tilt, degrees: 0 = level, -90 = straight down */
+  gimbalPitch: number;
 }
 
 /** What the scene measured this frame (null = no hit / tiles not loaded yet). */
@@ -93,6 +98,7 @@ export function createDroneState(home: Geodetic, heading: number, mode: FlightMo
     airborneSeconds: 0,
     crashSeconds: 0,
     warnings: { heightLimit: false, obstacle: false, lowBattery: false },
+    gimbalPitch: DRONE.gimbalPitch,
   };
 }
 
@@ -206,12 +212,20 @@ function clampToGround(s: DroneState): boolean {
   return true;
 }
 
+/** Tilt the camera at the mode's rate while the gimbal dial is turned (works on the ground too). */
+export function stepGimbal(s: DroneState, sticks: Sticks, dt: number): void {
+  const dial = clamp(Number.isFinite(sticks.gimbal) ? sticks.gimbal : 0, -1, 1);
+  if (dial === 0 || s.status === 'crashed') return;
+  s.gimbalPitch = clamp(s.gimbalPitch + dial * MODES[s.mode].gimbalPitchRate * dt, DRONE.gimbalMinPitch, DRONE.gimbalMaxPitch);
+}
+
 /**
  * Advance the drone by `dt` seconds. `env` must have been measured for this same state and
  * sticks (the obstacle distance along `probeDirection(state, sticks)`).
  */
 export function stepDrone(s: DroneState, sticks: Sticks, dt: number, env: DroneEnv): void {
   if (!(dt > 0)) return;
+  stepGimbal(s, sticks, dt);
   if (env.groundHeight != null && Number.isFinite(env.groundHeight)) s.groundHeight = env.groundHeight;
   const m = MODES[s.mode];
   const dir = probeDirection(s, sticks);

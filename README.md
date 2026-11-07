@@ -84,12 +84,13 @@ Shortcuts:
 | `T` | A | take off (auto-climb to 1.2 m) / land / cancel landing |
 | `W` `S` | left stick ↕ | climb / descend |
 | `A` `D` | left stick ↔ | turn left / right |
-| `↑` `↓` (or `I` `K`) | right stick ↕ | forward / back |
-| `←` `→` (or `J` `L`) | right stick ↔ | slide left / right |
+| `↑` `↓` | right stick ↕ | forward / back |
+| `←` `→` | right stick ↔ | slide left / right |
+| `K` `M` | RT / LT | camera tilt up / down (gimbal, −90° to +60°) |
 | `1` `2` `3` | LB / RB | Cine 5 m/s · Normal 12 m/s · Sport 16 m/s |
 | `[` `]` | | time of day earlier / later (hold to sweep) |
 | `G` | Y | rule-of-thirds grid |
-| `M` | | mute the motors |
+| `N` | | mute the motors |
 | `H` / `?` | View | show / hide the controls help |
 | `R` | B | reset to the launch point (after a crash or once landed) |
 | `Esc` | Menu | leave the drone (map controls take over from the drone's view) |
@@ -97,7 +98,9 @@ Shortcuts:
 How the drone behaves:
 - **Flight model.** Velocity-commanded, with per-mode acceleration and expo
   (`src/drone/physics.ts`, unit-tested). Keyboard axes ramp like spring-centred sticks.
-- **Camera.** Gimbal-stabilised with a level horizon and a fixed −12° tilt.
+- **Camera.** Gimbal-stabilised with a level horizon. It starts at a −12° tilt; `K` / `M` tilt it
+  between −90° (straight down) and +60°, faster in Sport and slower in Cine. GIM on the HUD shows
+  the angle.
 - **Collisions.** Every frame the drone is ray-cast against the terrain, water, trees and
   buildings.
   - Normal and Cine modes brake for obstacles ahead.
@@ -162,6 +165,12 @@ How it works:
   Cine modes brake at walls; Sport mode crashes into them. Landing on the bay is a splashdown.
 - `Esc` switches to a free orbit camera (drag to orbit, right-drag to pan, scroll to zoom).
   `T`, `Enter` or **Fly drone** puts the drone back on the plaza, landed (press `T` to take off).
+
+**Preview flight** (`P`) shows a hard-coded flight plan from Ferry Plaza as a dashed line in the city,
+then plays it as a 60 s letterboxed shot at 4 PM: a pull-away from the clock tower, an arc round
+to its sunlit west face with the Bay Bridge behind, and a climb over the tower out toward the bridge
+(`src/sf/previewRoute.ts`). `Esc` ends it early. Afterwards the drone is back on the plaza and the
+plan stays drawn, so you can fly it by hand.
 - The page runs on its own engine: the city and renderer from
   [argus](https://github.com/icecreamlun/argus) (vanilla three.js, n8ao, physical sky),
   ported to `src/sf/argus`. It is code-split, so the Emerald Bay page never loads it.

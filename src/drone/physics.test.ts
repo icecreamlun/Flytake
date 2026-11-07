@@ -7,6 +7,7 @@ import {
   heightAboveHome,
   neutralSticks,
   probeDirection,
+  resetToHome,
   stepDrone,
   toggleTakeoffLanding,
   type DroneEnv,
@@ -165,5 +166,30 @@ describe('drone physics', () => {
     const s = createDroneState(HOME, 0);
     s.lat += 0.001;
     expect(distanceFromHome(s)).toBeCloseTo(111.0, 0);
+  });
+  it('the gimbal dial tilts the camera at the mode rate and holds the angle when released', () => {
+    const s = createDroneState(HOME, 0, 'normal');
+    expect(s.gimbalPitch).toBe(DRONE.gimbalPitch);
+    run(s, { gimbal: -1 }, 1);
+    expect(s.gimbalPitch).toBeCloseTo(DRONE.gimbalPitch - MODES.normal.gimbalPitchRate, 0);
+    const held = s.gimbalPitch;
+    run(s, {}, 2);
+    expect(s.gimbalPitch).toBe(held);
+    const cine = createDroneState(HOME, 0, 'cine');
+    run(cine, { gimbal: 1 }, 1);
+    expect(cine.gimbalPitch).toBeCloseTo(DRONE.gimbalPitch + MODES.cine.gimbalPitchRate, 0);
+  });
+
+  it('the gimbal stops at its range and resets with the drone', () => {
+    const s = airborne(0, 'sport');
+    run(s, { gimbal: -1 }, 10);
+    expect(s.gimbalPitch).toBe(DRONE.gimbalMinPitch);
+    run(s, { gimbal: 1 }, 10);
+    expect(s.gimbalPitch).toBe(DRONE.gimbalMaxPitch);
+    s.status = 'crashed';
+    run(s, { gimbal: -1 }, 1);
+    expect(s.gimbalPitch).toBe(DRONE.gimbalMaxPitch);
+    resetToHome(s);
+    expect(s.gimbalPitch).toBe(DRONE.gimbalPitch);
   });
 });

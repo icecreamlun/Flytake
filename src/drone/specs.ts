@@ -21,6 +21,8 @@ export interface ModeSpec {
   yawTau: number;
   /** how far the stabilised camera lags the airframe's yaw (smooth pans) */
   gimbalYawTau: number;
+  /** camera tilt speed at full gimbal-dial deflection, deg/s */
+  gimbalPitchRate: number;
   /** stick expo: 0 = linear, 1 = fully cubic (fine control around centre) */
   expo: number;
   /** forward obstacle sensing brakes the drone (off in Sport, like the real thing) */
@@ -40,6 +42,7 @@ export const MODES: Record<FlightMode, ModeSpec> = {
     verticalTau: 0.6,
     yawTau: 0.45,
     gimbalYawTau: 0.3,
+    gimbalPitchRate: 15,
     expo: 0.35,
     obstacleAvoidance: true,
   },
@@ -55,6 +58,7 @@ export const MODES: Record<FlightMode, ModeSpec> = {
     verticalTau: 0.35,
     yawTau: 0.2,
     gimbalYawTau: 0.1,
+    gimbalPitchRate: 30,
     expo: 0.25,
     obstacleAvoidance: true,
   },
@@ -70,6 +74,7 @@ export const MODES: Record<FlightMode, ModeSpec> = {
     verticalTau: 0.25,
     yawTau: 0.12,
     gimbalYawTau: 0.05,
+    gimbalPitchRate: 45,
     expo: 0.15,
     obstacleAvoidance: false,
   },
@@ -99,8 +104,11 @@ export const DRONE = {
   crashSpeed: 3,
   /** hover endurance at 100% battery, s (Mini 4 Pro: ~34 min) */
   batterySeconds: 34 * 60,
-  /** fixed camera tilt for now (no gimbal control yet), degrees */
+  /** camera tilt at power-on / reset, degrees (0 = level, negative = down) */
   gimbalPitch: -12,
+  /** controllable tilt range (Mini 4 Pro: -90 to +60), degrees */
+  gimbalMinPitch: -90,
+  gimbalMaxPitch: 60,
   /** vertical field of view, degrees (~78 deg horizontal at 16:9) */
   fov: 48,
 } as const;

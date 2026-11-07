@@ -243,11 +243,11 @@ export class DroneSim implements DroneController {
       }
     }
 
-    // Gimbal: level horizon, fixed tilt, yaw follows the airframe with a little smoothing.
+    // Gimbal: level horizon, pilot-set tilt, yaw follows the airframe with a little smoothing.
     const m = MODES[s.mode];
     this.cameraHeading = wrap360(this.cameraHeading + wrap180(s.heading - this.cameraHeading) * (1 - Math.exp(-dt / m.gimbalYawTau)));
     this.crashBlend += ((s.status === 'crashed' ? 1 : 0) - this.crashBlend) * (1 - Math.exp(-dt / 0.18));
-    const pitch = DRONE.gimbalPitch - 30 * this.crashBlend;
+    const pitch = s.gimbalPitch - 30 * this.crashBlend;
     const roll = 24 * this.crashBlend;
     geodeticToEcef(s.lat, s.lon, s.height, out.position);
     quaternionFromHeadingPitchRoll(s.lat, s.lon, this.cameraHeading, pitch, roll, out.quaternion);

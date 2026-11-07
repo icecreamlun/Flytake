@@ -89,9 +89,10 @@ const HELP: Array<[string, string]> = [
   ['A  D', 'Turn left / right'],
   ['↑  ↓', 'Forward / back'],
   ['←  →', 'Slide left / right'],
+  ['K  M', 'Camera tilt up / down'],
   ['1 2 3', 'Cine / Normal / Sport'],
   ['G', 'Rule-of-thirds grid'],
-  ['M', 'Mute motors'],
+  ['N', 'Mute motors'],
   ['H', 'Show / hide this'],
   ['Esc', 'Leave the drone'],
 ];
@@ -107,7 +108,7 @@ const HelpPanel: FC<{ visible: boolean; gamepad: boolean }> = ({ visible, gamepa
         </div>
       ))}
     </dl>
-    {gamepad && <p className="dh-help-note">Gamepad: left stick climb + turn · right stick move · A take off / land · LB / RB mode</p>}
+    {gamepad && <p className="dh-help-note">Gamepad: left stick climb + turn · right stick move · LT / RT camera tilt · A take off / land · LB / RB mode</p>}
   </div>
 );
 
@@ -125,6 +126,7 @@ export const DroneHud: FC = () => {
   const hsRef = useRef<HTMLSpanElement>(null);
   const vsRef = useRef<HTMLSpanElement>(null);
   const aglRef = useRef<HTMLSpanElement>(null);
+  const gimbalRef = useRef<HTMLSpanElement>(null);
   const batteryRef = useRef<HTMLSpanElement>(null);
   const batteryFillRef = useRef<HTMLElement>(null);
   const warningRef = useRef<HTMLDivElement>(null);
@@ -168,6 +170,8 @@ export const DroneHud: FC = () => {
       set(hsRef, Math.hypot(s.vEast, s.vNorth).toFixed(1));
       set(vsRef, (Math.abs(s.vUp) < 0.05 ? 0 : s.vUp).toFixed(1));
       set(aglRef, heightAboveGround(s).toFixed(1));
+      const tilt = Math.round(s.gimbalPitch);
+      set(gimbalRef, (tilt < 0 ? '\u2212' : '') + Math.abs(tilt));
 
       const pct = Math.round(s.battery * 100);
       const minutes = (s.battery * DRONE.batterySeconds) / 60;
@@ -321,6 +325,11 @@ export const DroneHud: FC = () => {
             <span className="dh-k">AGL</span>
             <span className="dh-v" ref={aglRef} />
             <span className="dh-u">m</span>
+          </div>
+          <div className="dh-agl">
+            <span className="dh-k">GIM</span>
+            <span className="dh-v" ref={gimbalRef} />
+            <span className="dh-u">°</span>
           </div>
         </div>
 

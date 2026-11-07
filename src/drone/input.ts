@@ -2,13 +2,14 @@
  * Pilot input: keyboard laid out like a Mode 2 remote, plus any standard-mapping gamepad.
  *
  *   Left stick  (W/S, A/D)          throttle (climb / descend), yaw (turn left / right)
- *   Right stick (arrows or I/J/K/L)  pitch (forward / back), roll (sideways)
+ *   Right stick (arrows)             pitch (forward / back), roll (sideways)
+ *   Gimbal dial (K / M)              camera tilt up / down
  *   T  take off / land        1 / 2 / 3  Cine / Normal / Sport
- *   G  rule-of-thirds grid    H or ?     controls help    M  mute    R  reset (crashed / landed)
+ *   G  rule-of-thirds grid    H or ?     controls help    N  mute    R  reset (crashed / landed)
  *   Esc  leave the drone
  *
- * Gamepad: left stick throttle + yaw, right stick pitch + roll, A take off / land, B reset,
- * LB / RB flight mode, Y grid, View/Back help, Menu/Start leave.
+ * Gamepad: left stick throttle + yaw, right stick pitch + roll, LT / RT camera tilt down / up,
+ * A take off / land, B reset, LB / RB flight mode, Y grid, View/Back help, Menu/Start leave.
  * Keyboard axes ramp like a spring-centred stick, so a tap is a gentle nudge.
  */
 import { neutralSticks, type Sticks } from './physics';
@@ -41,10 +42,11 @@ type Axis = keyof Sticks;
 const AXIS_KEYS: Record<Axis, { pos: string[]; neg: string[] }> = {
   throttle: { pos: ['KeyW'], neg: ['KeyS'] },
   yaw: { pos: ['KeyD'], neg: ['KeyA'] },
-  pitch: { pos: ['ArrowUp', 'KeyI'], neg: ['ArrowDown', 'KeyK'] },
-  roll: { pos: ['ArrowRight', 'KeyL'], neg: ['ArrowLeft', 'KeyJ'] },
+  pitch: { pos: ['ArrowUp'], neg: ['ArrowDown'] },
+  roll: { pos: ['ArrowRight'], neg: ['ArrowLeft'] },
+  gimbal: { pos: ['KeyK'], neg: ['KeyM'] },
 };
-const AXES: Axis[] = ['throttle', 'yaw', 'pitch', 'roll'];
+const AXES: Axis[] = ['throttle', 'yaw', 'pitch', 'roll', 'gimbal'];
 const HANDLED = new Set([
   ...AXES.flatMap((a) => [...AXIS_KEYS[a].pos, ...AXIS_KEYS[a].neg]),
   'KeyT',
@@ -54,7 +56,7 @@ const HANDLED = new Set([
   'KeyG',
   'KeyH',
   'Slash',
-  'KeyM',
+  'KeyN',
   'KeyR',
   'Escape',
   'Space',
@@ -116,7 +118,7 @@ export class DroneInput {
         case 'Slash':
           a.help = true;
           break;
-        case 'KeyM':
+        case 'KeyN':
           a.mute = true;
           break;
         case 'KeyR':
@@ -171,6 +173,7 @@ export class DroneInput {
         yaw: deadzone(axes[0] ?? 0),
         pitch: -deadzone(axes[3] ?? 0),
         roll: deadzone(axes[2] ?? 0),
+        gimbal: deadzone((pad.buttons[7]?.value ?? 0) - (pad.buttons[6]?.value ?? 0)),
       };
       if (AXES.some((a) => g[a] !== 0)) this.gamepadActive = true;
       for (const a of AXES) out[a] = Math.max(-1, Math.min(1, out[a] + g[a]));

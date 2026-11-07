@@ -125,6 +125,7 @@ export function installDebugHooks(): void {
         heightAboveHome: s.height - s.home.height,
         heightAboveGround: s.height - s.groundHeight,
         heading: s.heading,
+        gimbalPitch: s.gimbalPitch,
         speed: Math.hypot(s.vEast, s.vNorth),
         vUp: s.vUp,
         battery: s.battery,
