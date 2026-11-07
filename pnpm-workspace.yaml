@@ -1,0 +1,8 @@
+# 3d-tiles-renderer 0.5.4, @vitejs/plugin-react 6.2.1 and vitest 5.1.0 are newer than
+# pnpm's default minimumReleaseAge; allow these exact versions explicitly.
+minimumReleaseAgeExclude:
+  - 3d-tiles-renderer@0.5.4
+  - '@vitejs/plugin-react@6.2.1'
+  - vitest@5.1.0
+onlyBuiltDependencies:
+  - esbuild

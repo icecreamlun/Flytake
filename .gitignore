@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env.local
+.env.*.local
+.DS_Store
+*.log
+coverage
+
+# Python
+__pycache__/
+*.pyc
+.venv/
