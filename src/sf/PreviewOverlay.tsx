@@ -1,7 +1,7 @@
 import { useEffect, useRef, type FC } from 'react';
 import { useFlytake } from '../state/store';
 import { blurActive } from '../ui/StartScreen';
-import { previewClock, startPreview, stopPreview, usePreview } from './preview';
+import { cyclePreviewSpeed, previewClock, startPreview, stopPreview, usePreview } from './preview';
 import { FLIGHT_SECONDS, PREVIEW_TAKEOFF, flightPolyline } from './previewRoute';
 import type { SfWorld } from './session';
 
@@ -25,11 +25,13 @@ export const PreviewButton: FC<{ world: SfWorld | null }> = ({ world }) => {
   const preparing = useFlytake((s) => s.dronePreparing);
   const blackout = useFlytake((s) => s.blackout);
   const active = usePreview((s) => s.active);
-  const visible = world != null && !active && !blackout && ((phase === 'drone' && !preparing) || phase === 'free');
+  const approved = usePreview((s) => s.approved);
+  const visible = approved && world != null && !active && !blackout && ((phase === 'drone' && !preparing) || phase === 'free');
 
   useEffect(() => {
     if (!visible || world == null) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable]')) return;
       if (e.code !== 'KeyP' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       e.preventDefault();
       startPreview(world);
@@ -37,6 +39,8 @@ export const PreviewButton: FC<{ world: SfWorld | null }> = ({ world }) => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [visible, world]);
+
+  if (!visible) return null;
 
   const onClick = () => {
     blurActive();
@@ -53,6 +57,7 @@ export const PreviewButton: FC<{ world: SfWorld | null }> = ({ world }) => {
 export const PreviewOverlay: FC<{ world: SfWorld | null }> = ({ world }) => {
   const active = usePreview((s) => s.active);
   const stage = usePreview((s) => s.stage);
+  const speed = usePreview((s) => s.speed);
   const barRef = useRef<HTMLElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
 
@@ -94,6 +99,9 @@ export const PreviewOverlay: FC<{ world: SfWorld | null }> = ({ world }) => {
         <span>Preview · Ferry Building, San Francisco · 4:00 PM</span>
         <span className="sf-preview-right">
           <span ref={timeRef} />
+          <button className="sf-preview-exit" tabIndex={active ? 0 : -1} onClick={() => { blurActive(); cyclePreviewSpeed(); }} aria-label={'Playback speed ' + speed + ' times. Click to change'}>
+            {speed}× speed
+          </button>
           <button className="sf-preview-exit" tabIndex={active ? 0 : -1} onClick={() => world != null && stopPreview(world)}>
             Esc · Exit
           </button>
