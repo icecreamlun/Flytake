@@ -31,4 +31,8 @@ export interface DroneController {
   setMode(mode: FlightMode): void;
   reset(): void;
   toggleHelp(): void;
+  /** first-person <-> chase view (published on the next frame) */
+  toggleView(): void;
+  /** obstacle avoidance on <-> off (Cine / Normal brake before obstacles when on) */
+  toggleAvoidance(): void;
 }

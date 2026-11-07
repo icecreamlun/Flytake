@@ -1651,3 +1651,77 @@ body,
   transform: scaleX(0);
   transform-origin: left center;
 }
+
+/* ------------------------------------------------------------ crash: fail */
+
+.dh-small[data-on='true'] {
+  border-color: rgba(243, 181, 98, 0.6);
+  color: var(--accent);
+}
+
+.dh-fail {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100vw - 32px));
+  padding: 26px 28px 24px;
+  border: 1px solid rgba(255, 90, 79, 0.35);
+  border-radius: 18px;
+  background: rgba(14, 10, 10, 0.72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -46%) scale(0.98);
+  transition:
+    opacity 0.35s ease,
+    transform 0.5s var(--ease-out);
+}
+
+.drone-hud[data-failed='true'] .dh-fail {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+
+.drone-hud[data-failed='true'] .dh-action {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dh-fail-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #ff5a4f;
+}
+
+.dh-fail-title {
+  margin: 0;
+  font: 400 42px/1.05 var(--serif);
+}
+
+.dh-fail-why {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.dh-fail-stats {
+  margin: 8px 0 20px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.dh-fail-retry kbd {
+  margin-left: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.12);
+  font-size: 11px;
+}

@@ -96,8 +96,9 @@ describe('drone physics', () => {
     const s = airborne(0);
     run(s, { yaw: 1 }, 1);
     expect(s.yawRate).toBeGreaterThan(MODES.normal.maxYawRate * 0.95);
-    expect(s.heading).toBeGreaterThan(40);
-    expect(s.heading).toBeLessThan(90);
+    // ~1 s at the yaw rate, less the spin-up
+    expect(s.heading).toBeGreaterThan(MODES.normal.maxYawRate * 0.6);
+    expect(s.heading).toBeLessThan(MODES.normal.maxYawRate);
   });
 
   it('flight modes cap the speed (Cine is slow)', () => {
@@ -141,8 +142,9 @@ describe('drone physics', () => {
     expect(heightAboveGround(s)).toBeCloseTo(DRONE.restHeight, 6);
   });
 
-  it('obstacle sensing brakes before a wall in Normal mode', () => {
+  it('obstacle sensing (when on) brakes before a wall in Normal mode', () => {
     const s = airborne(0, 'normal');
+    s.avoidance = true;
     run(s, { pitch: 1 }, 15, 60);
     expect(s.status).toBe('flying');
     expect(northOfHome(s)).toBeLessThan(60 - 1);
@@ -191,5 +193,34 @@ describe('drone physics', () => {
     expect(s.gimbalPitch).toBe(DRONE.gimbalMaxPitch);
     resetToHome(s);
     expect(s.gimbalPitch).toBe(DRONE.gimbalPitch);
+  });
+  it('with obstacle sensing off (the default), flying into a wall crashes and the drone falls', () => {
+    const s = airborne(0, 'normal');
+    expect(s.avoidance).toBe(false);
+    run(s, { throttle: 1 }, 4);
+    const before = s.height;
+    run(s, { pitch: 1 }, 15, 60);
+    expect(s.status).toBe('crashed');
+    expect(s.impactSpeed).toBeGreaterThan(DRONE.crashSpeed);
+    expect(northOfHome(s)).toBeLessThanOrEqual(60 + 0.01);
+    expect(before - HOME.height).toBeGreaterThan(5);
+    // fell to the ground
+    expect(heightAboveGround(s)).toBeCloseTo(DRONE.restHeight, 1);
+  });
+
+  it('a gentle nudge against a wall stops without crashing', () => {
+    const s = airborne(0, 'cine');
+    run(s, { pitch: 0.3 }, 30, 8);
+    expect(s.status).toBe('flying');
+    expect(northOfHome(s)).toBeLessThan(8);
+  });
+
+  it('reset keeps the obstacle-sensing setting', () => {
+    const s = airborne(0, 'normal');
+    s.avoidance = true;
+    s.status = 'crashed';
+    resetToHome(s);
+    expect(s.avoidance).toBe(true);
+    expect(s.status).toBe('grounded');
   });
 });

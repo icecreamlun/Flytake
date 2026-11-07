@@ -4,11 +4,11 @@
  * the drone camera pose (gimbal-stabilised: level horizon, fixed tilt, smoothed yaw).
  * Runs inside CameraDirector's frame callback, so input -> camera has zero frames of latency.
  */
-import { Raycaster, Vector3, type Intersection } from 'three';
+import { Group, Matrix4, Raycaster, Vector3, type Intersection, type Mesh } from 'three';
 import type { CameraSample } from '../camera/flyIn';
 import { FLAGS } from '../config';
 import { POIS, TAHOE } from '../geo/locations';
-import { enuVectors, geodeticToEcef, quaternionFromHeadingPitchRoll, wrap180, wrap360, type Geodetic } from '../geo/wgs84';
+import { enuToEcefMatrix, enuVectors, geodeticToEcef, quaternionFromHeadingPitchRoll, wrap180, wrap360, type Geodetic } from '../geo/wgs84';
 import { runtime, tilesLoading } from '../scene/runtime';
 import { waterSurfaceAt } from '../scene/WaterSurface';
 import { world } from '../world/handles';
@@ -16,6 +16,8 @@ import { insideScene, SCENE_FRAME_INV, SCENE_LAKE_LEVEL } from '../world/scene';
 import { MotorAudio } from './audio';
 import type { DroneController } from './controller';
 import { DroneInput } from './input';
+import { CHASE, DroneModel, MODEL_DROP } from './model';
+import { DRONE_CENTER_ENU, preLitDroneMaterial } from './preLitModel';
 import {
   bearing,
   createDroneState,
@@ -61,6 +63,9 @@ export function launchSite(): LaunchSite {
 }
 
 /** Discrete state the React UI renders (pushed only when it changes). */
+/** fpv: the gimbal camera; chase: behind and above the drone, which is in view */
+export type DroneView = 'fpv' | 'chase';
+
 export interface DroneUi {
   status: DroneStatus;
   mode: FlightMode;
@@ -68,6 +73,9 @@ export interface DroneUi {
   help: boolean;
   muted: boolean;
   gamepad: boolean;
+  view: DroneView;
+  /** obstacle avoidance switched on (DroneState.avoidance) */
+  avoidance: boolean;
 }
 
 export interface DroneHooks {
@@ -91,6 +99,13 @@ const _origin = new Vector3();
 const _dir = new Vector3();
 const _down = new Vector3();
 const _above = new Vector3();
+const _drone = new Vector3();
+const _look = new Matrix4();
+/** the model is Y-up / nose -Z; the drone's ENU frame is Z-up / north +Y */
+const Y_UP_TO_ENU = new Matrix4().makeRotationX(Math.PI / 2);
+const DEG = Math.PI / 180;
+/** a crashed drone rolls over this fast while it falls, deg/s */
+export const TUMBLE_RATE = 320;
 
 const _probeRay = new Raycaster();
 (_probeRay as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
@@ -157,6 +172,8 @@ export class DroneSim implements DroneController {
   private detachInput: (() => void) | null = null;
   private cameraHeading: number;
   private crashBlend = 0;
+  /** degrees the crashed drone has rolled over while falling */
+  private tumble = 0;
   private spin = 0;
   private prepSeconds = 0;
   private quietSeconds = 0;
@@ -167,6 +184,10 @@ export class DroneSim implements DroneController {
   private overWater = false;
   /** the current crash was a landing on the water */
   splashed = false;
+  /** chase view: the drone model and the camera's lagging heading */
+  private readonly model = new DroneModel(preLitDroneMaterial);
+  private readonly modelRoot = new Group();
+  private chaseHeading: number;
 
   constructor(
     readonly site: LaunchSite,
@@ -175,18 +196,25 @@ export class DroneSim implements DroneController {
   ) {
     this.state = createDroneState(site.position, site.heading, mode);
     this.cameraHeading = this.state.heading;
-    this.ui = { status: 'grounded', mode, grid: false, help: true, muted: false, gamepad: false };
+    this.ui = { status: 'grounded', mode, grid: false, help: true, muted: false, gamepad: false, view: 'fpv', avoidance: false };
+    this.chaseHeading = this.state.heading;
+    this.modelRoot.matrixAutoUpdate = false;
+    this.modelRoot.visible = false;
+    this.modelRoot.add(this.model.object);
     (this.raycaster as Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
   }
 
   attach(): void {
     this.detachInput ??= this.input.attach(() => this.audio.unlock());
+    if (this.modelRoot.parent == null) runtime.scene?.add(this.modelRoot);
   }
 
   dispose(): void {
     this.detachInput?.();
     this.detachInput = null;
     this.audio.dispose();
+    this.modelRoot.removeFromParent();
+    disposeModel(this.modelRoot);
   }
 
   /** UI buttons call these (same as the keys). */
@@ -206,12 +234,21 @@ export class DroneSim implements DroneController {
     resetToHome(s, this.site.heading);
     this.cameraHeading = s.heading;
     this.crashBlend = 0;
+    this.tumble = 0;
   }
 
   /** published on the next frame */
   toggleHelp(): void {
     this.ui = { ...this.ui, help: !this.ui.help };
     this.helpPinned = this.ui.help;
+  }
+
+  toggleView(): void {
+    this.ui = { ...this.ui, view: this.ui.view === 'fpv' ? 'chase' : 'fpv' };
+  }
+
+  toggleAvoidance(): void {
+    this.state.avoidance = !this.state.avoidance;
   }
 
   step(dt: number, out: CameraSample): void {
@@ -247,16 +284,50 @@ export class DroneSim implements DroneController {
     const m = MODES[s.mode];
     this.cameraHeading = wrap360(this.cameraHeading + wrap180(s.heading - this.cameraHeading) * (1 - Math.exp(-dt / m.gimbalYawTau)));
     this.crashBlend += ((s.status === 'crashed' ? 1 : 0) - this.crashBlend) * (1 - Math.exp(-dt / 0.18));
+    // Crashed in the air: the airframe tumbles all the way down and stays as it lands.
+    if (s.status !== 'crashed') this.tumble = 0;
+    else if (heightAboveGround(s) > DRONE.restHeight + 0.15) this.tumble += TUMBLE_RATE * dt;
     const pitch = s.gimbalPitch - 30 * this.crashBlend;
-    const roll = 24 * this.crashBlend;
+    const roll = 24 * this.crashBlend + this.tumble;
     geodeticToEcef(s.lat, s.lon, s.height, out.position);
     quaternionFromHeadingPitchRoll(s.lat, s.lon, this.cameraHeading, pitch, roll, out.quaternion);
     out.fov = DRONE.fov;
     this.cameraAgl = Math.max(0.05, heightAboveGround(s));
+    if (this.ui.view === 'chase') this.chase(dt, out);
+    else {
+      this.modelRoot.visible = false;
+      this.chaseHeading = this.cameraHeading;
+    }
 
     this.updateAudio(dt);
     this.updateReadiness(dt);
     this.publishUi();
+  }
+
+  /** Chase view: the camera behind and above the drone (pulled in if something is in between), looking at it. */
+  private chase(dt: number, out: CameraSample): void {
+    const s = this.state;
+    this.chaseHeading = wrap360(this.chaseHeading + wrap180(s.heading - this.chaseHeading) * (1 - Math.exp(-dt / CHASE.headingTau)));
+    // the model's centre, not the first-person camera, is what stays mid-frame
+    geodeticToEcef(s.lat, s.lon, s.height - MODEL_DROP, _drone);
+    enuVectors(s.lat, s.lon, _east, _north, _up);
+    const h = this.chaseHeading * DEG;
+    _dir.copy(_north).multiplyScalar(-Math.cos(h)).addScaledVector(_east, -Math.sin(h)).multiplyScalar(CHASE.distance).addScaledVector(_up, CHASE.height);
+    const len = _dir.length();
+    _dir.divideScalar(len);
+    const hit = this.cast(_drone, _dir, len + 0.3);
+    const dist = hit == null ? len : Math.max(CHASE.minDistance, Math.min(len, hit - 0.3));
+    out.position.copy(_drone).addScaledVector(_dir, dist);
+    out.quaternion.setFromRotationMatrix(_look.lookAt(out.position, _drone, _up));
+    // the drone must stay in front of the near plane
+    this.cameraAgl = Math.min(this.cameraAgl, 1.2);
+
+    enuToEcefMatrix(s.lat, s.lon, s.height - MODEL_DROP, this.modelRoot.matrix).multiply(Y_UP_TO_ENU);
+    this.modelRoot.matrixWorldNeedsUpdate = true;
+    this.modelRoot.visible = true;
+    this.model.object.visible = true;
+    this.model.pose(s, dt, this.spin, 60 * this.crashBlend + this.tumble);
+    DRONE_CENTER_ENU.copy(_drone).applyMatrix4(SCENE_FRAME_INV);
   }
 
   private applyActions(a: ReturnType<DroneInput['read']>): void {
@@ -272,6 +343,8 @@ export class DroneSim implements DroneController {
       s.mode = MODE_ORDER[Math.max(0, Math.min(MODE_ORDER.length - 1, i + a.modeStep))]!;
     }
     if (a.reset) this.reset();
+    if (a.view) this.toggleView();
+    if (a.avoidance) this.toggleAvoidance();
     if (a.grid) this.ui = { ...this.ui, grid: !this.ui.grid };
     if (a.help) {
       this.ui = { ...this.ui, help: !this.ui.help };
@@ -380,7 +453,7 @@ export class DroneSim implements DroneController {
 
   private publishUi(): void {
     const s = this.state;
-    const next: DroneUi = { ...this.ui, status: s.status, mode: s.mode, gamepad: this.input.gamepadConnected };
+    const next: DroneUi = { ...this.ui, status: s.status, mode: s.mode, gamepad: this.input.gamepadConnected, avoidance: s.avoidance };
     this.ui = next;
     const prev = this.published;
     if (
@@ -390,11 +463,24 @@ export class DroneSim implements DroneController {
       next.gamepad !== prev.gamepad ||
       next.grid !== prev.grid ||
       next.help !== prev.help ||
-      next.muted !== prev.muted
+      next.muted !== prev.muted ||
+      next.view !== prev.view ||
+      next.avoidance !== prev.avoidance
     ) {
       this.published = next;
       this.hooks.onUi(next);
     }
   }
   private published: DroneUi | null = null;
+}
+
+/** Free the chase model's GPU resources (geometries and materials). */
+export function disposeModel(root: Group): void {
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (m.isMesh !== true) return;
+    m.geometry.dispose();
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) mat.dispose();
+  });
 }
