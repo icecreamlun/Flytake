@@ -87,8 +87,10 @@ Shortcuts:
 | `↑` `↓` | right stick ↕ | forward / back |
 | `←` `→` | right stick ↔ | slide left / right |
 | `K` `M` | RT / LT | camera tilt up / down (gimbal, −90° to +60°) |
-| `1` `2` `3` | LB / RB | Cine 5 m/s · Normal 12 m/s · Sport 16 m/s |
+| `1` `2` `3` | LB / RB | Cine 5 m/s · Normal 12 m/s · Sport 22 m/s |
 | `[` `]` | | time of day earlier / later (hold to sweep) |
+| `V` | X | first-person / chase view (a Mini 4 Pro-style drone in the middle of the frame) |
+| `O` | | obstacle avoidance on / off (off by default) |
 | `G` | Y | rule-of-thirds grid |
 | `N` | | mute the motors |
 | `H` / `?` | View | show / hide the controls help |
@@ -103,8 +105,11 @@ How the drone behaves:
   the angle.
 - **Collisions.** Every frame the drone is ray-cast against the terrain, water, trees and
   buildings.
-  - Normal and Cine modes brake for obstacles ahead.
-  - Sport mode has no obstacle sensing, like the real drone, so flying into a tree is a crash.
+  - Hitting anything faster than 1.5 m/s is a crash: the motors cut, the drone tumbles to the
+    ground and a **Fail** card shows what happened (R or **Fly again** resets). A slower nudge
+    just stops against it.
+  - Obstacle avoidance is off by default. With `O` on, Cine and Normal brake before obstacles
+    ahead; Sport never does, like the real drone.
   - Landing on the lake is a splashdown.
   - Height is capped at 120 m above the take-off point.
 - **HUD.**
@@ -327,7 +332,7 @@ Seams and console:
 | 1 m bare-earth DEM | USGS 3DEP (`CA_SierraNevada_B22`) | public domain |
 | Lidar point cloud | USGS 3DEP `CA_SierraNevada_5_2022` (Entwine EPT, AWS `usgs-lidar-public`) | public domain |
 | Aerial imagery | USDA NAIP 2022 California (Microsoft Planetary Computer) | public domain |
-| Terrain materials and ground-cover scans | [Poly Haven](https://polyhaven.com) | CC0 |
+| Terrain materials and ground-cover scans; San Francisco lawn, paver and asphalt scans (`leafy_grass`, `concrete_pavement`, `asphalt_02`) | [Poly Haven](https://polyhaven.com) | CC0 |
 | Roads, paths and buildings (prop placement only) | © OpenStreetMap contributors | ODbL |
 | Foliage and bark textures | [ez-tree](https://github.com/dgreenheck/ez-tree) by Daniel Greenheck; bark from TextureCan | MIT; CC0 |
 | Atmosphere, clouds, stars | [@takram/three-atmosphere, three-clouds](https://github.com/takram-design-engineering/three-geospatial) | MIT |

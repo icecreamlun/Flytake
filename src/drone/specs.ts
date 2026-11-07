@@ -25,7 +25,7 @@ export interface ModeSpec {
   gimbalPitchRate: number;
   /** stick expo: 0 = linear, 1 = fully cubic (fine control around centre) */
   expo: number;
-  /** forward obstacle sensing brakes the drone (off in Sport, like the real thing) */
+  /** obstacle sensing can brake the drone in this mode when the pilot turns it on (never in Sport, like the real thing) */
   obstacleAvoidance: boolean;
 }
 
@@ -36,13 +36,13 @@ export const MODES: Record<FlightMode, ModeSpec> = {
     maxHorizontal: 5,
     maxAscent: 2,
     maxDescent: 1.5,
-    maxYawRate: 30,
+    maxYawRate: 20,
     accelTau: 1.1,
     brakeTau: 0.9,
     verticalTau: 0.6,
     yawTau: 0.45,
     gimbalYawTau: 0.3,
-    gimbalPitchRate: 15,
+    gimbalPitchRate: 8,
     expo: 0.35,
     obstacleAvoidance: true,
   },
@@ -52,29 +52,30 @@ export const MODES: Record<FlightMode, ModeSpec> = {
     maxHorizontal: 12,
     maxAscent: 5,
     maxDescent: 4,
-    maxYawRate: 75,
+    maxYawRate: 45,
     accelTau: 0.6,
     brakeTau: 0.45,
     verticalTau: 0.35,
     yawTau: 0.2,
     gimbalYawTau: 0.1,
-    gimbalPitchRate: 30,
+    gimbalPitchRate: 15,
     expo: 0.25,
     obstacleAvoidance: true,
   },
   sport: {
     label: 'Sport',
     short: 'S',
-    maxHorizontal: 16,
+    // faster than the Mini 4 Pro's 16 m/s (Air 3 class), for crossing the bay
+    maxHorizontal: 22,
     maxAscent: 6,
     maxDescent: 5,
-    maxYawRate: 120,
+    maxYawRate: 75,
     accelTau: 0.4,
     brakeTau: 0.32,
     verticalTau: 0.25,
     yawTau: 0.12,
     gimbalYawTau: 0.05,
-    gimbalPitchRate: 45,
+    gimbalPitchRate: 22,
     expo: 0.15,
     obstacleAvoidance: false,
   },
@@ -100,8 +101,8 @@ export const DRONE = {
   obstacleMargin: 2.5,
   /** contact distance: closer than this counts as touching the obstacle, m */
   contactDistance: 0.35,
-  /** hitting something faster than this (with avoidance off) is a crash, m/s */
-  crashSpeed: 3,
+  /** hitting something faster than this is a crash (props against a wall), m/s */
+  crashSpeed: 1.5,
   /** hover endurance at 100% battery, s (Mini 4 Pro: ~34 min) */
   batterySeconds: 34 * 60,
   /** camera tilt at power-on / reset, degrees (0 = level, negative = down) */

@@ -9,11 +9,12 @@
  * +Z south. The camera is driven through Engine.setCameraDriver, so the physics steps inside
  * the engine's frame, before the city culls and the post chain renders (zero frames of latency).
  */
-import { Vector3, type PerspectiveCamera } from 'three';
+import { Color, MeshStandardMaterial, Vector3, type PerspectiveCamera } from 'three';
 import { MotorAudio } from '../drone/audio';
 import type { DroneController } from '../drone/controller';
-import type { DroneHooks, DroneUi, LaunchSite } from '../drone/DroneSim';
+import { disposeModel, TUMBLE_RATE, type DroneHooks, type DroneUi, type LaunchSite } from '../drone/DroneSim';
 import { DroneInput } from '../drone/input';
+import { CHASE, DroneModel, MODEL_DROP, type DroneMaterialRole } from '../drone/model';
 import {
   createDroneState,
   heightAboveGround,
@@ -79,6 +80,28 @@ const CAMERA_FAR = 80000;
 
 const UP = new Vector3(0, 1, 0);
 const DOWN = new Vector3(0, -1, 0);
+const _toCamera = new Vector3();
+const _modelAt = new Vector3();
+
+/** Mini 4 Pro light-grey plastic under argus's sun, sky and shadow map. */
+function droneMaterial(role: DroneMaterialRole): MeshStandardMaterial {
+  switch (role) {
+    case 'body':
+      return new MeshStandardMaterial({ color: new Color('#b4b7bb'), roughness: 0.38, metalness: 0 });
+    case 'dark':
+      return new MeshStandardMaterial({ color: new Color('#1d1f22'), roughness: 0.55, metalness: 0.1 });
+    case 'prop':
+      return new MeshStandardMaterial({ color: new Color('#9da1a6'), roughness: 0.45 });
+    case 'disc':
+      return new MeshStandardMaterial({ color: new Color('#9da1a6'), roughness: 0.6, transparent: true, opacity: 0, depthWrite: false });
+    case 'glass':
+      return new MeshStandardMaterial({ color: new Color('#040507'), roughness: 0.06, metalness: 0.5 });
+    case 'metal':
+      return new MeshStandardMaterial({ color: new Color('#6b6f75'), roughness: 0.3, metalness: 0.85 });
+    case 'led':
+      return new MeshStandardMaterial({ color: new Color('#ff2a1a'), emissive: new Color('#ff2a1a'), emissiveIntensity: 2.5 });
+  }
+}
 const _origin = new Vector3();
 const _above = new Vector3();
 const _dir = new Vector3();
@@ -101,6 +124,8 @@ export class SfDroneSim implements DroneController {
   private readonly drive = (camera: PerspectiveCamera, dt: number) => this.step(Math.min(dt, MAX_STEP), camera);
   private cameraHeading: number;
   private crashBlend = 0;
+  /** degrees the crashed drone has rolled over while falling */
+  private tumble = 0;
   private spin = 0;
   private prepStarted = 0;
   private prepFrames = 0;
@@ -110,6 +135,9 @@ export class SfDroneSim implements DroneController {
   private readonly env: DroneEnv = { groundHeight: null, obstacleDistance: null };
   private overWater = false;
   private published: DroneUi | null = null;
+  /** chase view: the drone model and the camera's lagging heading */
+  private readonly model = new DroneModel(droneMaterial);
+  private chaseHeading: number;
 
   constructor(
     readonly site: SfLaunchSite,
@@ -120,7 +148,8 @@ export class SfDroneSim implements DroneController {
   ) {
     this.state = createDroneState(site.position, site.heading, mode);
     this.cameraHeading = this.state.heading;
-    this.ui = { status: 'grounded', mode, grid: false, help: true, muted: false, gamepad: false };
+    this.ui = { status: 'grounded', mode, grid: false, help: true, muted: false, gamepad: false, view: 'fpv', avoidance: false };
+    this.chaseHeading = this.state.heading;
   }
 
   /** Take the keyboard / gamepad and the engine camera (argus's orbit controls pause). */
@@ -129,6 +158,7 @@ export class SfDroneSim implements DroneController {
     this.detachInput = this.input.attach(() => this.audio.unlock());
     this.prepStarted = performance.now();
     this.engine.setCameraDriver(this.drive);
+    this.engine.scene.add(this.model.object);
   }
 
   /** Release input and audio; the camera goes back to argus's orbit controls at the current view. */
@@ -137,6 +167,8 @@ export class SfDroneSim implements DroneController {
     this.detachInput?.();
     this.detachInput = null;
     this.audio.dispose();
+    this.model.object.removeFromParent();
+    disposeModel(this.model.object);
   }
 
   takeoffOrLand(): void {
@@ -155,11 +187,20 @@ export class SfDroneSim implements DroneController {
     resetToHome(s, this.site.heading);
     this.cameraHeading = s.heading;
     this.crashBlend = 0;
+    this.tumble = 0;
   }
 
   toggleHelp(): void {
     this.ui = { ...this.ui, help: !this.ui.help };
     this.helpPinned = this.ui.help;
+  }
+
+  toggleView(): void {
+    this.ui = { ...this.ui, view: this.ui.view === 'fpv' ? 'chase' : 'fpv' };
+  }
+
+  toggleAvoidance(): void {
+    this.state.avoidance = !this.state.avoidance;
   }
 
   private step(dt: number, camera: PerspectiveCamera): void {
@@ -197,8 +238,11 @@ export class SfDroneSim implements DroneController {
     const m = MODES[s.mode];
     this.cameraHeading = wrap360(this.cameraHeading + wrap180(s.heading - this.cameraHeading) * (1 - Math.exp(-dt / m.gimbalYawTau)));
     this.crashBlend += ((s.status === 'crashed' ? 1 : 0) - this.crashBlend) * (1 - Math.exp(-dt / 0.18));
+    // Crashed in the air: the airframe tumbles all the way down and stays as it lands.
+    if (s.status !== 'crashed') this.tumble = 0;
+    else if (heightAboveGround(s) > DRONE.restHeight + 0.15) this.tumble += TUMBLE_RATE * dt;
     const pitch = s.gimbalPitch - 30 * this.crashBlend;
-    const roll = 24 * this.crashBlend;
+    const roll = 24 * this.crashBlend + this.tumble;
     this.cameraAgl = Math.max(0.05, heightAboveGround(s));
 
     // Camera: three looks down -Z (north here); yaw is clockwise from north, hence the minus.
@@ -212,10 +256,38 @@ export class SfDroneSim implements DroneController {
     const obstacle = this.env.obstacleDistance ?? Number.POSITIVE_INFINITY;
     camera.near = Math.min(1, Math.max(0.1, Math.min(this.cameraAgl * 0.5, obstacle * 0.4)));
     camera.far = CAMERA_FAR;
+    if (this.ui.view === 'chase') this.chase(dt, camera);
+    else {
+      this.model.object.visible = false;
+      this.chaseHeading = this.cameraHeading;
+    }
 
     this.updateAudio(dt);
     this.updateReadiness();
     this.publishUi();
+  }
+
+  /** Chase view: the camera behind and above the drone (pulled in if something is in between), looking at it. */
+  private chase(dt: number, camera: PerspectiveCamera): void {
+    const s = this.state;
+    this.chaseHeading = wrap360(this.chaseHeading + wrap180(s.heading - this.chaseHeading) * (1 - Math.exp(-dt / CHASE.headingTau)));
+    const h = this.chaseHeading * DEG;
+    // behind = -(north cos h + east sin h); north is -Z here
+    _toCamera.set(-Math.sin(h) * CHASE.distance, CHASE.height, Math.cos(h) * CHASE.distance);
+    const len = _toCamera.length();
+    _toCamera.divideScalar(len);
+    // the model's centre, not the first-person camera, is what stays mid-frame
+    _modelAt.copy(this.position).addScaledVector(UP, -MODEL_DROP);
+    const hit = this.collider.cast(_modelAt, _toCamera, len + 0.3);
+    const dist = hit == null ? len : Math.max(CHASE.minDistance, Math.min(len, hit - 0.3));
+    camera.position.copy(_modelAt).addScaledVector(_toCamera, dist);
+    camera.up.copy(UP);
+    camera.lookAt(_modelAt);
+    camera.near = 0.1;
+
+    this.model.object.position.copy(_modelAt);
+    this.model.object.visible = true;
+    this.model.pose(s, dt, this.spin, 60 * this.crashBlend + this.tumble);
   }
 
   private applyActions(a: ReturnType<DroneInput['read']>): void {
@@ -231,6 +303,8 @@ export class SfDroneSim implements DroneController {
       s.mode = MODE_ORDER[Math.max(0, Math.min(MODE_ORDER.length - 1, i + a.modeStep))]!;
     }
     if (a.reset) this.reset();
+    if (a.view) this.toggleView();
+    if (a.avoidance) this.toggleAvoidance();
     if (a.grid) this.ui = { ...this.ui, grid: !this.ui.grid };
     if (a.help) {
       this.ui = { ...this.ui, help: !this.ui.help };
@@ -320,7 +394,7 @@ export class SfDroneSim implements DroneController {
 
   private publishUi(): void {
     const s = this.state;
-    const next: DroneUi = { ...this.ui, status: s.status, mode: s.mode, gamepad: this.input.gamepadConnected };
+    const next: DroneUi = { ...this.ui, status: s.status, mode: s.mode, gamepad: this.input.gamepadConnected, avoidance: s.avoidance };
     this.ui = next;
     const prev = this.published;
     if (
@@ -330,7 +404,9 @@ export class SfDroneSim implements DroneController {
       next.gamepad !== prev.gamepad ||
       next.grid !== prev.grid ||
       next.help !== prev.help ||
-      next.muted !== prev.muted
+      next.muted !== prev.muted ||
+      next.view !== prev.view ||
+      next.avoidance !== prev.avoidance
     ) {
       this.published = next;
       this.hooks.onUi(next);

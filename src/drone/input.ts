@@ -6,10 +6,11 @@
  *   Gimbal dial (K / M)              camera tilt up / down
  *   T  take off / land        1 / 2 / 3  Cine / Normal / Sport
  *   G  rule-of-thirds grid    H or ?     controls help    N  mute    R  reset (crashed / landed)
+ *   V  first-person / chase view   O  obstacle avoidance on / off
  *   Esc  leave the drone
  *
  * Gamepad: left stick throttle + yaw, right stick pitch + roll, LT / RT camera tilt down / up,
- * A take off / land, B reset, LB / RB flight mode, Y grid, View/Back help, Menu/Start leave.
+ * A take off / land, B reset, X view, LB / RB flight mode, Y grid, View/Back help, Menu/Start leave.
  * Keyboard axes ramp like a spring-centred stick, so a tap is a gentle nudge.
  */
 import { neutralSticks, type Sticks } from './physics';
@@ -25,6 +26,10 @@ export interface InputActions {
   help: boolean;
   mute: boolean;
   reset: boolean;
+  /** first-person <-> chase view */
+  view: boolean;
+  /** obstacle avoidance on <-> off */
+  avoidance: boolean;
 }
 
 const noActions = (): InputActions => ({
@@ -36,6 +41,8 @@ const noActions = (): InputActions => ({
   help: false,
   mute: false,
   reset: false,
+  view: false,
+  avoidance: false,
 });
 
 type Axis = keyof Sticks;
@@ -57,6 +64,8 @@ const HANDLED = new Set([
   'KeyH',
   'Slash',
   'KeyN',
+  'KeyV',
+  'KeyO',
   'KeyR',
   'Escape',
   'Space',
@@ -65,6 +74,11 @@ const HANDLED = new Set([
 /** keyboard stick travel per second toward full deflection / back to centre */
 const KEY_RISE = 3.2;
 const KEY_RETURN = 7;
+/** turning and the gimbal dial ease in and out more gently: keys have no travel, a stick does */
+const YAW_RISE = 2;
+const YAW_RETURN = 4;
+const GIMBAL_RISE = 1.6;
+const GIMBAL_RETURN = 3.5;
 const DEADZONE = 0.1;
 
 function deadzone(v: number): number {
@@ -124,6 +138,12 @@ export class DroneInput {
         case 'KeyR':
           a.reset = true;
           break;
+        case 'KeyV':
+          a.view = true;
+          break;
+        case 'KeyO':
+          a.avoidance = true;
+          break;
         case 'Escape':
           a.exit = true;
           break;
@@ -155,7 +175,9 @@ export class DroneInput {
       const { pos, neg } = AXIS_KEYS[axis];
       const target = (pos.some((k) => this.down.has(k)) ? 1 : 0) - (neg.some((k) => this.down.has(k)) ? 1 : 0);
       const v = this.keyboard[axis];
-      const rate = target === 0 || Math.sign(target) !== Math.sign(v) ? KEY_RETURN : KEY_RISE;
+      const returning = target === 0 || Math.sign(target) !== Math.sign(v);
+      const rate =
+        axis === 'gimbal' ? (returning ? GIMBAL_RETURN : GIMBAL_RISE) : axis === 'yaw' ? (returning ? YAW_RETURN : YAW_RISE) : returning ? KEY_RETURN : KEY_RISE;
       const step = rate * dt;
       this.keyboard[axis] = Math.abs(target - v) <= step ? target : v + Math.sign(target - v) * step;
     }
@@ -182,6 +204,7 @@ export class DroneInput {
       const edge = (i: number) => pressed[i] === true && this.prevButtons[i] !== true;
       if (edge(0)) actions.takeoffLand = true;
       if (edge(1)) actions.reset = true;
+      if (edge(2)) actions.view = true;
       if (edge(3)) actions.grid = true;
       if (edge(4)) actions.modeStep -= 1;
       if (edge(5)) actions.modeStep += 1;
