@@ -8,6 +8,9 @@
  *  - curb faces (with painted red/yellow/white zones), seawalls with an algae band, murky bay floor;
  *  - beyond the data: the engine's procedural distant-city look so the far-ring seam vanishes;
  *  - night: baked street-lamp light pools (albedo × irradiance) as emissive.
+ * Flytake: lawns, granite plazas, asphalt and sidewalks also carry photo detail (CC0 Poly Haven scans in
+ * /sf/textures/ground: leafy_grass, concrete_pavement, asphalt_02) as a brightness / normal layer on top of
+ * the procedural colours, so the ground keeps its texture from drone height.
  */
 import * as THREE from 'three';
 import { CITY_GLSL } from '../../../engine/backdrop/cityShading';
@@ -25,6 +28,12 @@ uniform vec4 uDZ;
 uniform vec4 uCTX;
 uniform float uNight;
 uniform float uLamps;
+uniform sampler2D uGrassC;
+uniform sampler2D uGrassN;
+uniform sampler2D uPaveC;
+uniform sampler2D uPaveN;
+uniform sampler2D uAsphC;
+uniform sampler2D uAsphN;
 varying vec3 vGWorld;
 varying vec3 vGNrm;
 varying float vGKind;
@@ -35,6 +44,35 @@ vec3 gEmit;
 ${NOISE_GLSL}
 ${CITY_GLSL}
 ${WILD_GLSL}
+
+float gLum( vec3 c ) {
+	return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+}
+// A photo texture's mean colour (its 1×1 mip).
+vec3 gMean( sampler2D t ) {
+	return textureLod( t, vec2( 0.5 ), 16.0 ).rgb;
+}
+const mat2 G_ROT = mat2( 0.8, - 0.6, 0.6, 0.8 );
+// Two rotated, offset samples of a tiling photo blended by low-frequency noise (hides the repeat).
+// .rgb = colour, .a = blend weight of the second sample (reused for the matching normal).
+vec4 gPhoto( sampler2D t, vec2 p, float size ) {
+	float k = smoothstep( 0.38, 0.62, sNoise( p, 0.09 ) );
+	vec3 a = texture2D( t, p / size ).rgb;
+	vec3 b = texture2D( t, G_ROT * p / ( size * 1.37 ) + 0.31 ).rgb;
+	return vec4( mix( a, b, k ), k );
+}
+// Height gradient from a GL normal map, sampled like gPhoto (k from it), scaled by amt.
+vec2 gPhotoBump( sampler2D t, vec2 p, float size, float k, float amt ) {
+	vec3 a = texture2D( t, p / size ).xyz * 2.0 - 1.0;
+	vec3 b = texture2D( t, G_ROT * p / ( size * 1.37 ) + 0.31 ).xyz * 2.0 - 1.0;
+	b.xy = b.xy * G_ROT;
+	vec3 n = mix( a, b, k );
+	return - n.xy / max( n.z, 0.35 ) * amt;
+}
+// Brightness detail of a photo around 1 (its own mean), clamped and blended in by amp.
+float gDetail( vec3 c, vec3 mean, float amp ) {
+	return mix( 1.0, clamp( gLum( c ) / max( gLum( mean ), 1e-4 ), 0.3, 2.4 ), amp );
+}
 
 // Crisp-but-irregular edge from a soft 1 m coverage value.
 float gEdge( float m, float n, float px, float amp ) {
@@ -52,10 +90,13 @@ vec3 gAsphalt( vec2 p, float px, vec3 nL, vec3 nM ) {
 	float age = smoothstep( 0.25, 0.8, nL.x );
 	base *= mix( 0.8, 1.38, age );
 	base *= 0.92 + 0.16 * nM.x;
-	// Aggregate grain.
+	// Aggregate grain (scanned asphalt) plus the procedural fine grain.
+	vec4 scan = gPhoto( uAsphC, p, 3.0 );
+	base *= gDetail( scan.rgb, gMean( uAsphC ), 0.75 );
+	gBump += gPhotoBump( uAsphN, p, 3.0, scan.a, 0.05 );
 	float fG = 1.0 - smoothstep( 0.2, 0.55, px * 7.0 );
 	vec3 g = sNoiseW( p, 7.0 );
-	base *= 1.0 + ( g.x - 0.5 ) * 0.2 * fG;
+	base *= 1.0 + ( g.x - 0.5 ) * 0.12 * fG;
 	gBump += g.yz * 0.003 * fG;
 	float rough = 0.86 + 0.08 * g.x;
 	// Hairline cracks (old pavement only): thin ridged lines of a warped noise, faded with distance.
@@ -102,6 +143,10 @@ vec3 gConcrete( vec2 q, vec2 p, float px, vec3 nL, vec3 nM ) {
 	vec3 base = vec3( 0.36, 0.352, 0.335 ) * tone;
 	base *= 0.86 + 0.18 * nM.x;
 	base *= mix( 0.8, 1.0, smoothstep( 0.2, 0.7, nL.x ) );
+	// Exposed-aggregate grain (the asphalt scan at a finer scale, lightly).
+	vec4 ph = gPhoto( uAsphC, p, 1.1 );
+	base *= gDetail( ph.rgb, gMean( uAsphC ), 0.4 );
+	gBump += gPhotoBump( uAsphN, p, 1.1, ph.a, 0.025 );
 	// Gum / drip spots.
 	float spot = step( 0.985, sHash( floor( p * 3.0 ) ) ) * ( 1.0 - smoothstep( 0.03, 0.1, px ) );
 	base *= 1.0 - 0.35 * spot;
@@ -142,48 +187,80 @@ vec3 gPavers( vec2 q, vec2 p, float px, vec3 nL ) {
 	// Far away the pattern averages out to the mean colour.
 	float far = smoothstep( 0.03, 0.12, px );
 	col = mix( col, mix( vec3( 0.21, 0.115, 0.085 ), vec3( 0.27, 0.262, 0.25 ), granite ), far );
-	col = mix( col, vec3( 0.2, 0.19, 0.18 ), mortar );
+	col = mix( col, vec3( 0.2, 0.19, 0.18 ), mortar * ( 1.0 - granite ) );
+	if ( granite > 0.5 ) {
+		// Granite plazas: the scanned paver field (0.6 × 0.3 m running bond), at the slab brightness.
+		vec3 pm = gMean( uPaveC );
+		vec3 t = texture2D( uPaveC, q / 1.8 ).rgb;
+		col = t * ( 0.268 / gLum( pm ) ) * ( 0.88 + 0.24 * sNoise( p, 0.21 ) );
+		vec3 n = texture2D( uPaveN, q / 1.8 ).xyz * 2.0 - 1.0;
+		gBump += - n.xy / max( n.z, 0.35 ) * 0.06;
+	} else {
+		// Brick: scanned grain on the procedural bond.
+		vec4 ph = gPhoto( uAsphC, p, 0.9 );
+		col *= gDetail( ph.rgb, gMean( uAsphC ), 0.3 );
+	}
 	col *= 0.85 + 0.25 * nL.x;
 	col = mix( col, G_BAND * ( 0.9 + 0.2 * h * ( 1.0 - far ) ), gPaverBand( q, px ) * granite );
 	gRough = 0.78 + 0.1 * mortar;
 	return col;
 }
 
+// Lawn: the procedural lush / dry tint carrying the scanned turf's blades, leaves and clumps (two
+// scales, so it still reads from 100 m up), with a little of the photo's own colour for variety and
+// mowing stripes along the nearest street (they average out once a pixel spans a stripe).
+const vec3 G_LUSH = vec3( 0.058, 0.108, 0.03 );
+const vec3 G_DRY = vec3( 0.15, 0.135, 0.07 );
+vec3 gLawn( vec2 p, vec3 tint, float px, float bump ) {
+	vec3 m = gMean( uGrassC );
+	vec4 ph = gPhoto( uGrassC, p, 2.0 );
+	vec3 col = mix( tint * gDetail( ph.rgb, m, 1.0 ), ph.rgb * ( gLum( tint ) / gLum( m ) ), 0.2 );
+	vec3 clump = texture2D( uGrassC, G_ROT * p / 9.5 + 0.7 ).rgb;
+	col *= gDetail( clump, m, 0.55 );
+	vec2 q = gStreetFrame( p, ( p - uDZ.xy ) / uDZ.zw );
+	float stripe = smoothstep( - 0.35, 0.35, sin( q.x * 3.14159 / 1.6 ) ) * 2.0 - 1.0;
+	col *= 1.0 + 0.07 * stripe * ( 1.0 - smoothstep( 0.2, 0.6, px ) );
+	if ( bump > 0.0 ) gBump += gPhotoBump( uGrassN, p, 2.0, ph.a, 0.08 * bump );
+	return col;
+}
+
 vec3 gGrass( vec2 p, float px, vec3 nL, vec3 nM ) {
-	vec3 lush = vec3( 0.045, 0.085, 0.024 );
-	vec3 dry = vec3( 0.13, 0.12, 0.06 );
-	vec3 col = mix( lush, dry, smoothstep( 0.55, 0.9, nL.x ) * 0.6 );
-	col *= 0.75 + 0.5 * nM.x;
-	float fG = 1.0 - smoothstep( 0.1, 0.3, px * 4.0 );
-	vec3 g = sNoiseW( p, 9.0 );
-	col *= 1.0 + ( g.x - 0.5 ) * 0.35 * fG;
-	gBump += g.yz * 0.004 * fG;
+	vec3 col = mix( G_LUSH, G_DRY, smoothstep( 0.55, 0.9, nL.x ) * 0.6 );
+	col *= 0.8 + 0.4 * nM.x;
+	col = gLawn( p, col, px, 1.0 );
 	gRough = 0.95;
 	return col;
 }
 
 // Band-limited means of the near-path materials (what each converges to once its detail has faded).
-vec3 gGrassFar( vec3 nL ) {
-	return mix( vec3( 0.045, 0.085, 0.024 ), vec3( 0.13, 0.12, 0.06 ), smoothstep( 0.55, 0.9, nL.x ) * 0.6 );
+vec3 gGrassFar( vec2 p, vec3 nL, float px ) {
+	return gLawn( p, mix( G_LUSH, G_DRY, smoothstep( 0.55, 0.9, nL.x ) * 0.6 ), px, 0.0 );
 }
-vec3 gAsphaltFar( vec3 nL ) {
-	return vec3( 0.066, 0.064, 0.061 ) * mix( 0.8, 1.38, smoothstep( 0.25, 0.8, nL.x ) );
+vec3 gAsphaltFar( vec2 p, vec3 nL ) {
+	vec3 base = vec3( 0.066, 0.064, 0.061 ) * mix( 0.8, 1.38, smoothstep( 0.25, 0.8, nL.x ) );
+	return base * gDetail( gPhoto( uAsphC, p, 3.0 ).rgb, gMean( uAsphC ), 0.75 );
 }
 vec3 gPaversFar( vec2 p, vec3 nL, float px ) {
 	float granite = step( 0.5, sHash( floor( p / 90.0 ) + 7.0 ) );
 	vec3 col = mix( vec3( 0.21, 0.115, 0.085 ), vec3( 0.27, 0.262, 0.25 ), granite ) * ( 0.85 + 0.25 * nL.x );
-	if ( granite > 0.5 && px < 1.2 ) col = mix( col, G_BAND, gPaverBand( gStreetFrame( p, ( p - uDZ.xy ) / uDZ.zw ), px ) );
+	if ( granite > 0.5 && px < 1.2 ) {
+		vec2 q = gStreetFrame( p, ( p - uDZ.xy ) / uDZ.zw );
+		vec3 pm = gMean( uPaveC );
+		col = texture2D( uPaveC, q / 1.8 ).rgb * ( 0.268 / gLum( pm ) ) * ( 0.88 + 0.24 * sNoise( p, 0.21 ) );
+		col = mix( col, G_BAND, gPaverBand( q, px ) );
+	}
 	return col;
 }
 // Distant block tops: landcover composited in the same priority order as the near path, flat colours.
 vec3 gBlockFar( vec4 A, vec4 B, vec3 wp, vec3 n, vec3 nL, float px ) {
 	vec2 p = wp.xz;
 	vec3 col = gWildFar( wp, n, nL, px );
-	col = mix( col, gGrassFar( nL ), A.g );
-	col = mix( col, vec3( 0.36, 0.352, 0.335 ) * 0.93 * mix( 0.8, 1.0, smoothstep( 0.2, 0.7, nL.x ) ), A.r );
-	col = mix( col, gAsphaltFar( nL ) * 1.25, A.a );
+	col = mix( col, gGrassFar( p, nL, px ), A.g );
+	vec3 conc = vec3( 0.36, 0.352, 0.335 ) * 0.93 * mix( 0.8, 1.0, smoothstep( 0.2, 0.7, nL.x ) );
+	col = mix( col, conc * gDetail( gPhoto( uAsphC, p, 1.1 ).rgb, gMean( uAsphC ), 0.4 ), A.r );
+	col = mix( col, gAsphaltFar( p, nL ) * 1.25, A.a );
 	col = mix( col, vec3( 0.33, 0.32, 0.30 ) * 0.78, B.g );
-	col = mix( col, vec3( 0.29, 0.235, 0.16 ) * 0.975, B.r );
+	col = mix( col, vec3( 0.29, 0.235, 0.16 ) * 0.975 * gDetail( gPhoto( uAsphC, p, 0.8 ).rgb, gMean( uAsphC ), 0.55 ), B.r );
 	if ( A.b > 0.004 ) col = mix( col, gPaversFar( p, nL, px ), A.b );
 	gRough = 0.9;
 	return col;
@@ -275,11 +352,11 @@ void gShade( out vec3 alb ) {
 		if ( kind < 0.5 ) {
 			// Road level: carriageway asphalt (bay floor / shore handled below).
 			if ( farPx ) {
-				col = gAsphaltFar( nL );
+				col = gAsphaltFar( p, nL );
 				gRough = 0.88;
 			} else {
 				float fd = smoothstep( 0.07, 0.12, px );
-				col = mix( gAsphalt( p, px, nL, nM ), gAsphaltFar( nL ), fd );
+				col = mix( gAsphalt( p, px, nL, nM ), gAsphaltFar( p, nL ), fd );
 				gRough = mix( gRough, 0.88, fd );
 				gBump *= 1.0 - fd;
 			}
@@ -324,7 +401,8 @@ void gShade( out vec3 alb ) {
 				col = mix( col, sc, steps );
 			}
 			if ( dirt > 0.0 ) {
-				vec3 dc = vec3( 0.29, 0.235, 0.16 ) * ( 0.8 + 0.35 * nM.x );
+				// Decomposed-granite paths: scanned grain at pebble scale.
+				vec3 dc = vec3( 0.29, 0.235, 0.16 ) * ( 0.8 + 0.35 * nM.x ) * gDetail( gPhoto( uAsphC, p, 0.8 ).rgb, gMean( uAsphC ), 0.55 );
 				col = mix( col, dc, dirt );
 				rr = mix( rr, 0.97, dirt );
 			}
@@ -377,6 +455,15 @@ void gShade( out vec3 alb ) {
 }
 `;
 
+/** Flytake: a tiling photo texture for the ground (sRGB colour or linear normal map), mipmapped. */
+function groundTexture(file: string, color: boolean): THREE.Texture {
+  const t = new THREE.TextureLoader().load(`/sf/textures/ground/${file}`);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  t.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  return t;
+}
+
 export class GroundMaterial {
   readonly material: THREE.MeshStandardMaterial;
   readonly uniforms = {
@@ -388,6 +475,12 @@ export class GroundMaterial {
     uCTX: { value: new THREE.Vector4(CTX.minX, CTX.minZ, CTX.maxX, CTX.maxZ) },
     uNight: { value: 0 },
     uLamps: { value: 0 },
+    uGrassC: { value: groundTexture('grass_c.jpg', true) },
+    uGrassN: { value: groundTexture('grass_n.jpg', false) },
+    uPaveC: { value: groundTexture('pavers_c.jpg', true) },
+    uPaveN: { value: groundTexture('pavers_n.jpg', false) },
+    uAsphC: { value: groundTexture('asphalt_c.jpg', true) },
+    uAsphN: { value: groundTexture('asphalt_n.jpg', false) },
   };
 
   constructor(lc: Landcover) {
@@ -421,7 +514,7 @@ export class GroundMaterial {
         )
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gEmit;');
     };
-    mat.customProgramCacheKey = () => 'argus-ground-v3';
+    mat.customProgramCacheKey = () => 'argus-ground-v4';
     this.material = mat;
   }
 
