@@ -8,6 +8,7 @@ import { useSun } from '../world/sun';
 import { setSfDebugError, setSfDebugWorld } from './debug';
 import { usePreview } from './preview';
 import { PreviewButton, PreviewOverlay } from './PreviewOverlay';
+import { PreviewChat } from './PreviewChat';
 import { flySf, prepareSf, type SfWorld } from './session';
 
 /** Data credits for the argus city (public/sf/data/SOURCES.md). */
@@ -122,6 +123,7 @@ export const SfApp: FC = () => {
       {!previewing && <TimeOfDay />}
       {revealed && <PreviewButton world={world} />}
       <PreviewOverlay world={world} />
+      {revealed && <PreviewChat world={world} />}
       <p className="sf-credits" data-visible={!loading}>
         {CREDITS}
       </p>

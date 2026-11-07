@@ -18,10 +18,14 @@ export type PreviewStage = 'overview' | 'flight';
 
 interface PreviewState {
   active: boolean;
+  approved: boolean;
+  completed: boolean;
+  reviewPending: boolean;
+  speed: 1 | 2 | 3;
   stage: PreviewStage;
 }
 
-export const usePreview = create<PreviewState>(() => ({ active: false, stage: 'overview' }));
+export const usePreview = create<PreviewState>(() => ({ active: false, stage: 'overview', approved: false, completed: false, reviewPending: false, speed: 1 }));
 
 /** Seconds into the current stage, read by the overlay's progress bar every frame. */
 export const previewClock = { seconds: 0 };
@@ -74,7 +78,7 @@ export function startPreview(world: SfWorld): void {
     runtime.drone = null;
     hoursBefore = useSun.getState().hours;
     useSun.getState().setHours(PREVIEW_HOURS);
-    usePreview.setState({ active: true, stage: 'overview' });
+    usePreview.setState({ active: true, stage: 'overview', reviewPending: false, speed: 1 });
     useFlytake.setState({ phase: 'free', dronePreparing: false, droneUi: null });
     line.object.visible = true;
     line.setRange(0, 0);
@@ -82,7 +86,7 @@ export function startPreview(world: SfWorld): void {
     let stage: PreviewStage = 'overview';
     let t = 0;
     world.city.engine.setCameraDriver((camera, dt) => {
-      t += dt;
+      t += dt * usePreview.getState().speed;
       previewClock.seconds = t;
       if (stage === 'overview') {
         const k = MathUtils.smootherstep(t, 0, OVERVIEW.seconds);
@@ -100,17 +104,21 @@ export function startPreview(world: SfWorld): void {
       sampleFlight(ft, _pos, _look);
       aim(camera, _pos, _look, MathUtils.clamp((_pos.y - 2.6) * 0.4, 0.2, 1));
       line.setRange(line.distanceAt(ft) + LINE_LEAD);
-      if (t >= FLIGHT_SECONDS + END_HOLD) stopPreview(world);
+      if (t >= FLIGHT_SECONDS + END_HOLD) {
+        usePreview.setState({ completed: true, reviewPending: !usePreview.getState().approved });
+        stopPreview(world);
+      }
     });
   });
 }
 
-/** Back to the drone on the plaza; the plan stays drawn in the city. */
+/** Back to the drone on the plaza; only an approved plan stays drawn in the city. */
 export function stopPreview(world: SfWorld): void {
   // (while the opening fade is still running, flyDrone would refuse: wait for the picture)
   if (!usePreview.getState().active || ending || useFlytake.getState().blackout) return;
   ending = true;
-  route.get(world)?.setRange(0);
+  const line = route.get(world);
+  if (line) { line.setRange(0); line.object.visible = usePreview.getState().approved; }
   // flyDrone fades to black first; the preview keeps the last frame until the drone takes over.
   flySf(world);
   window.setTimeout(() => {
@@ -118,4 +126,19 @@ export function stopPreview(world: SfWorld): void {
     hoursBefore = null;
     usePreview.setState({ active: false, stage: 'overview' });
   }, CUT_FADE_MS);
+}
+
+/** Approval applies only to this page session; it unlocks replay and the persistent map route. */
+export function approvePreview(world: SfWorld): void {
+  const state = usePreview.getState();
+  if (state.active || !state.completed) return;
+  const line = routeFor(world);
+  line.setRange(0);
+  line.object.visible = true;
+  usePreview.setState({ approved: true, reviewPending: false });
+}
+/** Change playback pacing while preserving the planned camera path. */
+export function cyclePreviewSpeed(): void {
+  const { speed } = usePreview.getState();
+  usePreview.setState({ speed: speed === 3 ? 1 : speed === 2 ? 3 : 2 });
 }
