@@ -18,9 +18,14 @@ const STATUS_LABEL: Record<DroneStatus, string> = {
 
 const MODE_NOTE: Record<FlightMode, string> = {
   cine: 'Cine · 5 m/s · slow, smooth moves for filming',
-  normal: 'Normal · 12 m/s · obstacle sensing on',
-  sport: 'Sport · 16 m/s · obstacle sensing OFF',
+  normal: 'Normal · 12 m/s',
+  sport: 'Sport · 22 m/s · no obstacle braking, even with avoidance on',
 };
+
+/** after a crash the drone falls; the fail card comes up once it has had time to land */
+const FAIL_CARD_AFTER = 1.1;
+
+const flightClock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 /* ---------------------------------------------------------------- compass */
 
@@ -91,6 +96,8 @@ const HELP: Array<[string, string]> = [
   ['←  →', 'Slide left / right'],
   ['K  M', 'Camera tilt up / down'],
   ['1 2 3', 'Cine / Normal / Sport'],
+  ['V', 'First person / chase view'],
+  ['O', 'Obstacle avoidance on / off'],
   ['G', 'Rule-of-thirds grid'],
   ['N', 'Mute motors'],
   ['H', 'Show / hide this'],
@@ -108,7 +115,7 @@ const HelpPanel: FC<{ visible: boolean; gamepad: boolean }> = ({ visible, gamepa
         </div>
       ))}
     </dl>
-    {gamepad && <p className="dh-help-note">Gamepad: left stick climb + turn · right stick move · LT / RT camera tilt · A take off / land · LB / RB mode</p>}
+    {gamepad && <p className="dh-help-note">Gamepad: left stick climb + turn · right stick move · LT / RT camera tilt · A take off / land · X view · LB / RB mode</p>}
   </div>
 );
 
@@ -130,6 +137,10 @@ export const DroneHud: FC = () => {
   const batteryRef = useRef<HTMLSpanElement>(null);
   const batteryFillRef = useRef<HTMLElement>(null);
   const warningRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const failTitleRef = useRef<HTMLHeadingElement>(null);
+  const failWhyRef = useRef<HTMLParagraphElement>(null);
+  const failStatsRef = useRef<HTMLParagraphElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const homeRef = useRef<HTMLSpanElement>(null);
   const headingRef = useRef<HTMLSpanElement>(null);
@@ -199,11 +210,24 @@ export const DroneHud: FC = () => {
       if (leftRef.current) leftRef.current.style.transform = `translate(${(st.yaw * R).toFixed(1)}px, ${(-st.throttle * R).toFixed(1)}px)`;
       if (rightRef.current) rightRef.current.style.transform = `translate(${(st.roll * R).toFixed(1)}px, ${(-st.pitch * R).toFixed(1)}px)`;
 
+      // Crash: the fail card once the drone is down (the warning bar meanwhile).
+      const failed = s.status === 'crashed' && s.crashSeconds > FAIL_CARD_AFTER;
+      if (rootRef.current && rootRef.current.dataset.failed !== String(failed)) {
+        rootRef.current.dataset.failed = String(failed);
+        if (failed) {
+          const water = drone.site.water ?? 'lake';
+          set(failTitleRef, drone.splashed ? 'Splashdown' : 'Drone down');
+          set(failWhyRef, drone.splashed ? `It landed in the ${water}.` : `It hit an obstacle at ${s.impactSpeed.toFixed(1)} m/s and fell.`);
+          set(failStatsRef, `Flight ${flightClock(s.airborneSeconds)} · ${distanceFromHome(s).toFixed(0)} m from home · ${s.avoidance ? 'avoidance on' : 'avoidance off'}`);
+        }
+      }
+
       // Warnings, most important first.
       const w = s.warnings;
       let text = '';
       let level = 'warn';
-      if (s.status === 'crashed') {
+      if (failed) text = '';
+      else if (s.status === 'crashed') {
         text = drone.splashed
           ? `Splashdown — the drone landed in the ${drone.site.water ?? 'lake'} · press R to reset`
           : 'Collision — drone down · press R to reset';
@@ -255,9 +279,21 @@ export const DroneHud: FC = () => {
     blurActive();
     runtime.drone?.toggleHelp();
   };
+  const onView = () => {
+    blurActive();
+    runtime.drone?.toggleView();
+  };
+  const onAvoidance = () => {
+    blurActive();
+    runtime.drone?.toggleAvoidance();
+  };
+  const onReset = () => {
+    blurActive();
+    runtime.drone?.reset();
+  };
 
   return (
-    <div className="drone-hud" data-visible={visible} aria-hidden={!visible} inert={!visible}>
+    <div className="drone-hud" ref={rootRef} data-visible={visible} data-failed="false" aria-hidden={!visible} inert={!visible}>
       <div className="dh-grid" data-visible={visible && ui?.grid === true} />
 
       <div className="dh-top">
@@ -285,6 +321,12 @@ export const DroneHud: FC = () => {
             </span>
             <span ref={batteryRef} />
           </span>
+          <button className="pill pill-ghost dh-small" data-on={ui?.avoidance === true} onClick={onAvoidance} title="Obstacle avoidance (Cine / Normal brake before obstacles)">
+            Avoid {ui?.avoidance ? 'on' : 'off'} · O
+          </button>
+          <button className="pill pill-ghost dh-small" onClick={onView} title="First person / chase view">
+            {ui?.view === 'chase' ? 'Chase' : 'FPV'} · V
+          </button>
           <button className="pill pill-ghost dh-small" onClick={onHelp}>
             Help · H
           </button>
@@ -295,6 +337,15 @@ export const DroneHud: FC = () => {
       </div>
 
       <div className="dh-warning" ref={warningRef} data-visible="false" role="status" />
+      <div className="dh-fail" role="alertdialog" aria-label="Flight failed">
+        <p className="dh-fail-kicker mono">Fail</p>
+        <h2 className="dh-fail-title" ref={failTitleRef} />
+        <p className="dh-fail-why" ref={failWhyRef} />
+        <p className="dh-fail-stats mono" ref={failStatsRef} />
+        <button className="pill pill-accent dh-fail-retry" onClick={onReset}>
+          Fly again <kbd className="mono">R</kbd>
+        </button>
+      </div>
       <div className="dh-toast" data-visible={toast != null}>
         {toast}
       </div>

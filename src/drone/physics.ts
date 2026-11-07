@@ -53,6 +53,10 @@ export interface DroneState extends Geodetic {
   battery: number;
   airborneSeconds: number;
   crashSeconds: number;
+  /** speed into the obstacle at the last crash, m/s (0 for a splashdown) */
+  impactSpeed: number;
+  /** pilot setting: obstacle sensing brakes before walls (Cine / Normal only); off by default */
+  avoidance: boolean;
   warnings: DroneWarnings;
   /** camera tilt, degrees: 0 = level, -90 = straight down */
   gimbalPitch: number;
@@ -80,7 +84,7 @@ export interface Command {
 
 const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
 
-export function createDroneState(home: Geodetic, heading: number, mode: FlightMode = 'normal'): DroneState {
+export function createDroneState(home: Geodetic, heading: number, mode: FlightMode = 'normal', avoidance = false): DroneState {
   return {
     lat: home.lat,
     lon: home.lon,
@@ -97,6 +101,8 @@ export function createDroneState(home: Geodetic, heading: number, mode: FlightMo
     battery: 1,
     airborneSeconds: 0,
     crashSeconds: 0,
+    impactSpeed: 0,
+    avoidance,
     warnings: { heightLimit: false, obstacle: false, lowBattery: false },
     gimbalPitch: DRONE.gimbalPitch,
   };
@@ -163,9 +169,9 @@ export function toggleTakeoffLanding(state: DroneState): void {
   }
 }
 
-/** Put the drone back on its take-off point, landed, motors off (keeps the flight mode). */
+/** Put the drone back on its take-off point, landed, motors off (keeps the flight mode and avoidance setting). */
 export function resetToHome(state: DroneState, heading = state.heading): void {
-  Object.assign(state, createDroneState(state.home, heading, state.mode));
+  Object.assign(state, createDroneState(state.home, heading, state.mode, state.avoidance));
 }
 
 /** Height above the take-off point. */
@@ -301,9 +307,9 @@ export function stepDrone(s: DroneState, sticks: Sticks, dt: number, env: DroneE
   // Landing protection: never descend fast into the ground.
   if (s.status === 'flying' && tU < 0 && agl < DRONE.groundSlowZone) tU = Math.max(tU, -Math.max(0.4, agl * 0.8));
 
-  // Forward obstacle sensing: cap the speed toward the obstacle so the drone can still stop.
+  // Obstacle sensing (when on): cap the speed toward the obstacle so the drone can still stop.
   const d = dir != null ? env.obstacleDistance : null;
-  if (dir != null && d != null && m.obstacleAvoidance) {
+  if (dir != null && d != null && m.obstacleAvoidance && s.avoidance) {
     const allowed = Math.sqrt(2 * DRONE.brakeDecel * Math.max(0, d - DRONE.obstacleMargin));
     const tc = tE * dir.east + tN * dir.north;
     if (tc > allowed) {
@@ -328,13 +334,15 @@ export function stepDrone(s: DroneState, sticks: Sticks, dt: number, env: DroneE
   s.vUp += (tU - s.vUp) * (1 - Math.exp(-dt / m.verticalTau));
   s.yawRate += (tYaw - s.yawRate) * (1 - Math.exp(-dt / m.yawTau));
 
-  // Contact with the obstacle: bump (stop) or, too fast with sensing off, crash.
+  // Contact with the obstacle: a gentle nudge stops against it, anything faster is a crash (the
+  // props hit) and the drone falls.
   if (dir != null && d != null) {
     const vc = s.vEast * dir.east + s.vNorth * dir.north;
     if (vc > 0 && d - vc * dt < DRONE.contactDistance) {
-      if (!m.obstacleAvoidance && vc > DRONE.crashSpeed) {
+      if (vc > DRONE.crashSpeed) {
         s.status = 'crashed';
         s.crashSeconds = 0;
+        s.impactSpeed = vc;
         s.yawRate = vc * 12 * (s.yawRate >= 0 ? 1 : -1);
         s.vEast = -s.vEast * 0.15;
         s.vNorth = -s.vNorth * 0.15;
