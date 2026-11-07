@@ -16,12 +16,16 @@ import { flySf, type SfWorld } from './session';
 
 export type PreviewStage = 'overview' | 'flight';
 
+/** playback speeds the speed button steps through */
+export const PREVIEW_SPEEDS = [1, 2, 3, 5, 10] as const;
+export type PreviewSpeed = (typeof PREVIEW_SPEEDS)[number];
+
 interface PreviewState {
   active: boolean;
   approved: boolean;
   completed: boolean;
   reviewPending: boolean;
-  speed: 1 | 2 | 3;
+  speed: PreviewSpeed;
   stage: PreviewStage;
 }
 
@@ -140,5 +144,5 @@ export function approvePreview(world: SfWorld): void {
 /** Change playback pacing while preserving the planned camera path. */
 export function cyclePreviewSpeed(): void {
   const { speed } = usePreview.getState();
-  usePreview.setState({ speed: speed === 3 ? 1 : speed === 2 ? 3 : 2 });
+  usePreview.setState({ speed: PREVIEW_SPEEDS[(PREVIEW_SPEEDS.indexOf(speed) + 1) % PREVIEW_SPEEDS.length]! });
 }

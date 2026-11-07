@@ -52,15 +52,19 @@ describe('preview approval lifecycle', () => {
     approvePreview(world);
     expect(usePreview.getState().approved).toBe(true);
   });
-  it('cycles 1x, 2x and 3x and changes the running clock immediately', () => {
+  it('cycles 1x, 2x, 3x, 5x and 10x and changes the running clock immediately', () => {
     startPreview(world);
     const camera = new PerspectiveCamera();
     driver!(camera, 1);
     cyclePreviewSpeed(); expect(usePreview.getState().speed).toBe(2);
     cyclePreviewSpeed(); expect(usePreview.getState().speed).toBe(3);
     driver!(camera, 2); expect(previewClock.seconds).toBe(6);
+    cyclePreviewSpeed(); expect(usePreview.getState().speed).toBe(5);
+    driver!(camera, 1); expect(previewClock.seconds).toBe(11);
+    cyclePreviewSpeed(); expect(usePreview.getState().speed).toBe(10);
+    driver!(camera, 1); expect(previewClock.seconds).toBe(21);
     cyclePreviewSpeed(); expect(usePreview.getState().speed).toBe(1);
-    driver!(camera, 2); expect(previewClock.seconds).toBe(8);
+    driver!(camera, 2); expect(previewClock.seconds).toBe(23);
   });
   it('completes at accelerated speed and resets speed for the next preview', () => {
     startPreview(world);
