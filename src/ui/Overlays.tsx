@@ -47,7 +47,7 @@ const ReplayIcon: FC = () => (
   </svg>
 );
 
-const DroneIcon: FC = () => (
+export const DroneIcon: FC = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
     <circle cx="5.5" cy="5.5" r="3" />
     <circle cx="18.5" cy="5.5" r="3" />

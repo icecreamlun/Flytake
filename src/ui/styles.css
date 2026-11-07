@@ -1389,3 +1389,93 @@ body,
   font-size: 11px;
   opacity: 0.5;
 }
+
+/* San Francisco (src/sf/SfApp.tsx) */
+.sf-topbar {
+  z-index: 11;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.sf-topbar[data-visible='true'] {
+  opacity: 1;
+}
+
+.sf-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sf-link {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.sf-kbd {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(27, 19, 8, 0.14);
+  font-size: 11px;
+}
+
+.sf-credits {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 40;
+  max-width: min(760px, 100%);
+  margin: 0;
+  padding: 10px 10px 6px;
+  font: 400 11px/15px var(--sans);
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.sf-credits[data-visible='false'] {
+  opacity: 0;
+}
+
+.start-alt {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  text-shadow: var(--shadow);
+  transition: color 0.2s ease;
+}
+
+.start-alt:hover,
+.start-alt:focus-visible {
+  color: var(--accent);
+}
+
+.start-alt svg {
+  width: 13px;
+  height: 13px;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.setup-sf {
+  text-decoration: none;
+}
+
+.sf-loader {
+  /* above the blackout and the drone-preparing note: one screen until the first drone frame */
+  z-index: 27;
+}

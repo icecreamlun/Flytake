@@ -1,6 +1,14 @@
 import type { FC } from 'react';
+import { SAN_FRANCISCO } from '../camera/destinations';
 import { TILES_PROVIDER } from '../config';
 import { useFlytake } from '../state/store';
+
+/** San Francisco runs on its own city model: always flyable, key or not. */
+const FlySanFrancisco: FC = () => (
+  <a className="pill pill-accent setup-sf" href={SAN_FRANCISCO.href}>
+    Fly San Francisco — no key needed
+  </a>
+);
 
 /** Setup instructions when no tiles credentials are configured, or the tiles server refuses them. */
 export const MissingKey: FC = () => {
@@ -21,9 +29,12 @@ export const MissingKey: FC = () => {
           <p className="setup-lede">
             {server} could not be reached (<code>{tilesError}</code>). Check the network connection or VPN, then try again.
           </p>
-          <button className="pill" type="button" onClick={() => window.location.reload()}>
-            Try again
-          </button>
+          <div className="setup-actions">
+            <button className="pill" type="button" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+            <FlySanFrancisco />
+          </div>
         </div>
       </div>
     );
@@ -60,6 +71,9 @@ export const MissingKey: FC = () => {
             Restart: <code>pnpm dev</code>
           </li>
         </ol>
+        <div className="setup-actions">
+          <FlySanFrancisco />
+        </div>
       </div>
     </div>
   );

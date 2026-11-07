@@ -1,7 +1,7 @@
 import type { GlobeControls as GlobeControlsImpl, TilesRenderer as TilesRendererImpl } from '3d-tiles-renderer';
 import type { PerspectiveCamera, Scene } from 'three';
 import type { FlyInPath } from '../camera/flyIn';
-import type { DroneSim } from '../drone/DroneSim';
+import type { DroneController } from '../drone/controller';
 
 /**
  * Mutable per-frame state shared between the R3F scene and the DOM overlays. Nothing in here
@@ -20,8 +20,8 @@ export const runtime = {
   path: null as FlyInPath | null,
   /** smoothed frames per second */
   fps: 0,
-  /** first-person drone (drone phase only) */
-  drone: null as DroneSim | null,
+  /** first-person drone (drone phase only): DroneSim here, SfDroneSim in San Francisco */
+  drone: null as DroneController | null,
 };
 
 /** TilesRenderer.stats (present at runtime, missing from the 0.5.4 typings). */

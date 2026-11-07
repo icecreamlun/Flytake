@@ -22,5 +22,8 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The argus city port keeps argus's looser options (tsconfig.sf.json); seen here via declarations.
+  "exclude": ["src/sf/argus"],
+  "references": [{ "path": "./tsconfig.sf.json" }]
 }

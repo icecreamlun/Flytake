@@ -24,6 +24,8 @@ the next step. This repo is the flight simulator and the world it flies in.
 3. **Change the time of day.** Drag the slider or hold `[` / `]` to move the sun between
    7:15 AM and 4:24 PM on Nov 7. Terrain, ridge and tree shadows, the water and the sky all
    update live at 60 fps.
+4. **Fly San Francisco.** The same drone takes off behind the Ferry Building, with the Bay
+   Bridge across the water. It needs no key (see [San Francisco](#san-francisco-ferry-building)).
 
 Inside an 8 km box around the bay, everything is custom. Outside it, Google Photorealistic 3D
 Tiles show the rest of Lake Tahoe and the planet.
@@ -58,6 +60,7 @@ with these setup steps.
 Shortcuts:
 - http://localhost:5173/?drone=1 skips the descent and starts on the beach with the drone.
 - http://localhost:5173/?drone=1&time=8.5 does the same at 8:30 AM.
+- http://localhost:5173/?loc=sf flies San Francisco from the Ferry Building. No key needed.
 
 ## Using it
 
@@ -137,6 +140,39 @@ Rules for anyone adding to the scene:
   `albedo * (direct * sunColor + ambient * ao) * uFlatSunInv`, using the uniforms in
   `src/world/light.ts`. Get sun visibility from `flySunVis()` in `src/world/shadowGlsl.ts`.
 
+## San Francisco (Ferry Building)
+
+Open http://localhost:5173/?loc=sf, or type "sf", "ferry" or "bay bridge" on the start screen.
+It needs no Google or Cesium key, because everything is local (`public/sf`, ~13 MB). The setup
+card has a **Fly San Francisco** button too.
+
+What is there:
+- The Financial District and the waterfront in a 3 × 2.4 km box: 5,689 buildings with roofs
+  and rooftop detail, streets with traffic and streetcars, palms and street trees, and the
+  piers.
+- Hand-built landmarks: the Ferry Building and its clock tower, the Bay Bridge's west span,
+  the pier sheds, Transamerica, Coit Tower and Old St. Mary's.
+- The bay, a physical sky, sun shadows, and distant hills with Golden Gate and Alcatraz
+  silhouettes.
+
+How it works:
+- The drone takes off from Ferry Plaza, the paved apron behind the Ferry Building, facing the
+  bridge.
+- It uses the same flight model, HUD, sound and time-of-day slider as Emerald Bay. Normal and
+  Cine modes brake at walls; Sport mode crashes into them. Landing on the bay is a splashdown.
+- `Esc` switches to a free orbit camera (drag to orbit, right-drag to pan, scroll to zoom).
+  `T`, `Enter` or **Fly drone** puts the drone back on the plaza, landed (press `T` to take off).
+- The page runs on its own engine: the city and renderer from
+  [argus](https://github.com/icecreamlun/argus) (vanilla three.js, n8ao, physical sky),
+  ported to `src/sf/argus`. It is code-split, so the Emerald Bay page never loads it.
+- The drone collides with three-mesh-bvh bounds trees over the static city: ground, piers,
+  building walls and roofs, and the landmarks including the bridge (`src/sf/collision.ts`).
+
+Credits: buildings, streets and piers © OpenStreetMap contributors (ODbL). DataSF (PDDL)
+provides the building footprints with 2010 LiDAR heights, the SF Assessor tax rolls and the
+street trees. Terrain and bathymetry come from AWS Terrain Tiles (USGS 3DEP and NOAA). The
+city model was ported from argus. Details are in `public/sf/data/SOURCES.md`.
+
 ## Project layout
 
 ```
@@ -152,11 +188,13 @@ src/
   ground/            streamed ground cover (rocks, grass, shrubs, logs)
   state/store.ts     zustand app state (phases, flight control, readiness)
   ui/                start screen, HUDs, time-of-day slider, letterbox, title card, attribution
+  sf/                San Francisco (/?loc=sf): app, drone, collision; argus/ is the ported city engine
 public/
   scene/             generated Emerald Bay data: terrain tiles, dtm.bin, trees.bin, ground cover
   textures/          terrain materials, forest, ground props, water (waves + lake depth)
   atmosphere/        precomputed atmosphere tables + star catalogue
   clouds/            cloud shape / weather textures
+  sf/                San Francisco city data (city.json, terrain) and water normals
 tools/
   scene/             Python pipeline: lidar / DEM / NAIP -> public/scene
   water/             wave and lake-depth textures -> public/textures/water
@@ -194,6 +232,7 @@ Start and camera:
 
 | Flag | Effect |
 | --- | --- |
+| `?loc=sf` | San Francisco: drone at the Ferry Building, no key needed (`&time=` works too) |
 | `?drone=1` | start in drone mode on Vikingsholm Beach |
 | `?launch=38.9531,-120.1068,78` | drone launch site override (lat, lon, optional heading) |
 | `?time=8.5` | initial time of day in PST hours on Nov 7 (7.25 to 16.4) |
@@ -233,6 +272,10 @@ Scene A/B and debug views:
 - drone: `enterDrone()`, `exitDrone()`, `drone()`;
 - scene: `time` (get/set, PST hours), `pose(eyeEnu, targetEnu)`, `groundAtEnu(e, n)`,
   `surfaceAt(lat, lon)`.
+
+On `/?loc=sf`, `window.__sf` exposes `ready`, `state`, `drone()` (the same fields plus
+`x`/`y`/`z` in the city frame: +X east, +Y up, +Z south), `time`, `fly()`, `exitDrone()`,
+`cast(origin, dir, far)`, and the live `engine`, `city` and `collider`.
 
 ## Performance
 
@@ -280,6 +323,10 @@ Seams and console:
 | Foliage and bark textures | [ez-tree](https://github.com/dgreenheck/ez-tree) by Daniel Greenheck; bark from TextureCan | MIT; CC0 |
 | Atmosphere, clouds, stars | [@takram/three-atmosphere, three-clouds](https://github.com/takram-design-engineering/three-geospatial) | MIT |
 | Rest of the world | Google Photorealistic 3D Tiles, streamed at runtime and never stored in this repo | Google Maps Platform terms; attribution shown on screen |
+| San Francisco buildings, streets, piers | © OpenStreetMap contributors | ODbL |
+| San Francisco footprints + LiDAR heights, Assessor rolls, street trees | DataSF | PDDL |
+| San Francisco terrain and bay bathymetry | AWS Terrain Tiles (USGS 3DEP, NOAA) | public domain / open data |
+| San Francisco city model and renderer | [argus](https://github.com/icecreamlun/argus), ported to `src/sf/argus` | same author |
 
 Per-asset details are in the READMEs under `src/forest`, `src/ground`, `tools/scene` and
 `tools/water`.

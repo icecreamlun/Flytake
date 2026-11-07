@@ -1,0 +1,24 @@
+{
+  // The San Francisco city ported from argus (src/sf/argus) keeps argus's own, looser compiler
+  // options. It is a composite project so src/sf code in tsconfig.app.json sees it through
+  // declarations and does not re-check it under the stricter app rules.
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "./node_modules/.tmp/sf-types",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.sf.tsbuildinfo",
+    "rootDir": "./src/sf/argus",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/sf/argus"]
+}

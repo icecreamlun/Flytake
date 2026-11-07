@@ -6,7 +6,8 @@ import { getDestination } from '../camera/destinations';
 import { IDLE_BASE, cinematicIdlePose } from '../camera/idle';
 import { CUES, FLIGHT_DURATION, cuesAt, sameCues, type Cues } from '../camera/timeline';
 import { runtime } from '../scene/runtime';
-import { DroneSim, launchSite, type DroneUi } from '../drone/DroneSim';
+import { DroneSim, launchSite, type DroneHooks, type DroneUi } from '../drone/DroneSim';
+import type { DroneController } from '../drone/controller';
 
 /**
  * loading  - waiting for the atmosphere tables and the first tiles
@@ -17,6 +18,9 @@ import { DroneSim, launchSite, type DroneUi } from '../drone/DroneSim';
  * drone    - first-person drone flight (DroneSim owns the camera)
  */
 export type Phase = 'loading' | 'start' | 'flying' | 'arrived' | 'free' | 'drone';
+
+/** Makes the drone for drone mode; the store supplies the hooks. */
+export type DroneFactory = (hooks: DroneHooks) => DroneController;
 
 export interface FlytakeState {
   phase: Phase;
@@ -39,6 +43,8 @@ export interface FlytakeState {
   dronePreparing: boolean;
   /** drone mode: discrete UI state pushed by DroneSim */
   droneUi: DroneUi | null;
+  /** launch site shown while the drone prepares (null = the Emerald Bay launch site) */
+  droneSite: string | null;
 
   setAtmosphereReady(): void;
   setTilesReady(): void;
@@ -59,6 +65,11 @@ export interface FlytakeState {
   enterDrone(): void;
   /** leave the drone: GlobeControls take over from the drone's current view */
   exitDrone(): void;
+  /**
+   * Drone mode with a drone made elsewhere (San Francisco, which has its own engine): fade to
+   * black (straight in while loading), then `create` it at `site` and reveal once it is ready.
+   */
+  flyDrone(site: string, create: DroneFactory): void;
 }
 
 /** Drift after arrival: starts at the arrival speed (2.5 m/s) and coasts to a stop. */
@@ -102,11 +113,13 @@ function startFlight(startPose = cinematicIdlePose(runtime.idleSeconds), destina
   disableControls();
 }
 
+const emeraldDrone: DroneFactory = (hooks) => new DroneSim(launchSite(), hooks);
+
 /** Create the drone at its launch site and switch to drone mode (the screen is already black). */
-function startDrone(set: (partial: Partial<FlytakeState>) => void): void {
+function startDrone(set: (partial: Partial<FlytakeState>) => void, create: DroneFactory = emeraldDrone): void {
   disableControls();
   runtime.drone?.dispose();
-  const sim = new DroneSim(launchSite(), {
+  const sim = create({
     onUi: (ui) => set({ droneUi: ui }),
     onExit: () => useFlytake.getState().exitDrone(),
     onReady: () => set({ dronePreparing: false, blackout: false }),
@@ -139,6 +152,7 @@ export const useFlytake = create<FlytakeState>()((set, get) => ({
   heroReady: false,
   dronePreparing: false,
   droneUi: null,
+  droneSite: null,
 
   setAtmosphereReady: () => set({ atmosphereReady: true }),
   setTilesReady: () => set({ tilesReady: true }),
@@ -245,5 +259,18 @@ export const useFlytake = create<FlytakeState>()((set, get) => ({
       enableControls();
       set({ phase: 'free', dronePreparing: false, droneUi: null, frozenT: null, hold: false });
     });
+  },
+
+  flyDrone: (site, create) => {
+    const { phase, blackout } = get();
+    if (phase === 'drone' || blackout) return;
+    if (phase === 'loading') {
+      // the loading screen is still up: no fade needed
+      set({ droneSite: site });
+      startDrone(set, create);
+      return;
+    }
+    set({ blackout: true, dronePreparing: true, droneSite: site });
+    window.setTimeout(() => startDrone(set, create), CUT_FADE_MS);
   },
 }));

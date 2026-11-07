@@ -1,5 +1,5 @@
 import { useEffect, useState, type FC, type FormEvent } from 'react';
-import { DESTINATIONS, findDestination } from '../camera/destinations';
+import { DESTINATIONS, findDestination, findPageDestination, PAGE_DESTINATIONS, SAN_FRANCISCO } from '../camera/destinations';
 import { TILES_PROVIDER } from '../config';
 import { useFlytake } from '../state/store';
 
@@ -51,7 +51,14 @@ export const StartScreen: FC = () => {
     blurActive();
     const destination = findDestination(query);
     if (destination == null) {
-      setError(`Only preset locations are available in this preview — try “${DESTINATIONS[0]!.label}”.`);
+      // A preset with its own page (San Francisco): a full page load, no descent from space.
+      const page = findPageDestination(query);
+      if (page != null) {
+        setQuery(page.label);
+        window.location.assign(page.href);
+        return;
+      }
+      setError(`Only preset locations are available in this preview — try “${DESTINATIONS[0]!.label}” or “${SAN_FRANCISCO.label}”.`);
       return;
     }
     setError(null);
@@ -89,6 +96,9 @@ export const StartScreen: FC = () => {
               {DESTINATIONS.map((d) => (
                 <option key={d.id} value={d.label} />
               ))}
+              {PAGE_DESTINATIONS.map((d) => (
+                <option key={d.id} value={d.label} />
+              ))}
             </datalist>
           </label>
           <button type="submit" className="fly-button" tabIndex={visible ? 0 : -1} data-busy={preparing} aria-busy={preparing}>
@@ -98,6 +108,9 @@ export const StartScreen: FC = () => {
         <p className="start-note" data-error={error != null}>
           {error ?? (preparing ? 'Streaming the arrival view so it lands sharp…' : 'Photorealistic 3D Tiles · physically based atmosphere · real sun position')}
         </p>
+        <a className="start-alt" href={SAN_FRANCISCO.href} tabIndex={visible ? 0 : -1}>
+          Or fly the Ferry Building, San Francisco <ArrowIcon />
+        </a>
       </section>
     </div>
   );

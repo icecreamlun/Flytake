@@ -14,6 +14,7 @@ import { waterSurfaceAt } from '../scene/WaterSurface';
 import { world } from '../world/handles';
 import { insideScene, SCENE_FRAME_INV, SCENE_LAKE_LEVEL } from '../world/scene';
 import { MotorAudio } from './audio';
+import type { DroneController } from './controller';
 import { DroneInput } from './input';
 import {
   bearing,
@@ -139,7 +140,7 @@ export function launchCameraSample(site: LaunchSite, out: CameraSample): CameraS
   return out;
 }
 
-export class DroneSim {
+export class DroneSim implements DroneController {
   readonly state: DroneState;
   readonly sticks: Sticks = neutralSticks();
   ui: DroneUi;

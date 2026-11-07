@@ -54,3 +54,32 @@ export function findDestination(query: string): Destination | null {
 export function getDestination(id: string): Destination {
   return DESTINATIONS.find((d) => d.id === id) ?? EMERALD_BAY;
 }
+
+/** A preset with a page of its own (no descent from space): choosing it navigates there. */
+export interface PageDestination {
+  id: string;
+  label: string;
+  aliases: string[];
+  href: string;
+}
+
+/** The argus city around the Ferry Building: its own engine, no tiles key needed (src/sf). */
+export const SAN_FRANCISCO: PageDestination = {
+  id: 'san-francisco',
+  label: 'Ferry Building, San Francisco',
+  aliases: ['sf', 'san francisco', 'ferry', 'embarcadero', 'bay bridge', 'financial district'],
+  href: '/?loc=sf',
+};
+
+export const PAGE_DESTINATIONS: readonly PageDestination[] = [SAN_FRANCISCO];
+
+/** Like findDestination, for the page presets (checked after the fly-in presets). */
+export function findPageDestination(query: string): PageDestination | null {
+  const q = query.trim().toLowerCase();
+  if (q === '') return null;
+  return (
+    PAGE_DESTINATIONS.find((d) => d.label.toLowerCase() === q || d.id === q) ??
+    PAGE_DESTINATIONS.find((d) => d.aliases.some((a) => q.includes(a) || a.includes(q))) ??
+    null
+  );
+}

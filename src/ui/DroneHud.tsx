@@ -200,7 +200,9 @@ export const DroneHud: FC = () => {
       let text = '';
       let level = 'warn';
       if (s.status === 'crashed') {
-        text = drone.splashed ? 'Splashdown — the drone landed in the lake · press R to reset' : 'Collision — drone down · press R to reset';
+        text = drone.splashed
+          ? `Splashdown — the drone landed in the ${drone.site.water ?? 'lake'} · press R to reset`
+          : 'Collision — drone down · press R to reset';
         level = 'danger';
       } else if (w.obstacle) text = 'Obstacle ahead · braking';
       else if (w.heightLimit) text = `Height limit · ${DRONE.heightLimit} m above take-off`;
@@ -338,9 +340,10 @@ export const DroneHud: FC = () => {
 /** Shown on the black screen while the launch site streams in. */
 export const DronePreparing: FC = () => {
   const preparing = useFlytake((s) => s.dronePreparing);
+  const site = useFlytake((s) => s.droneSite) ?? launchSite().name;
   return (
     <div className="drone-preparing" data-visible={preparing} aria-hidden={!preparing}>
-      <p className="mono">Preparing drone · {launchSite().name}</p>
+      <p className="mono">Preparing drone · {site}</p>
     </div>
   );
 };

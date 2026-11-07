@@ -6,7 +6,7 @@ import { createSample, ecefToGeodetic, FlyInPath, poseToSample, type CameraSampl
 import { cinematicIdlePose, IDLE_BASE } from '../camera/idle';
 import { CUES, cuesAt, type Cues } from '../camera/timeline';
 import { FLAGS } from '../config';
-import { launchCameraSample, launchSite } from '../drone/DroneSim';
+import { DroneSim, launchCameraSample, launchSite } from '../drone/DroneSim';
 import { FLIGHT_OPTIONS, useFlytake } from '../state/store';
 import { adjustNearFar } from './clipping';
 import { exposureForHeight } from './exposure';
@@ -82,7 +82,7 @@ export const CameraDirector: FC = () => {
       }
       case 'drone': {
         const drone = runtime.drone;
-        if (drone == null) {
+        if (!(drone instanceof DroneSim)) {
           drive = false;
           break;
         }
