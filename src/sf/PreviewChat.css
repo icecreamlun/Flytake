@@ -35,3 +35,15 @@
 .sf-review-card p{font-size:13px;line-height:1.7;color:var(--muted);margin-bottom:23px}
 .sf-review-card button{width:100%;justify-content:center;cursor:pointer;margin-top:10px}
 .sf-review-card button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+
+
+
+.sf-chat-preparing{padding:16px 0;color:var(--muted);font-size:12px;line-height:1.7}
+.sf-chat-thinking{display:flex;gap:5px;margin-bottom:12px}
+.sf-chat-thinking i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:sf-chat-pulse 1.2s ease-in-out infinite}
+.sf-chat-thinking i:nth-child(2){animation-delay:.15s}
+.sf-chat-thinking i:nth-child(3){animation-delay:.3s}
+.sf-chat-shot button:disabled{opacity:.6;cursor:default}
+@keyframes sf-chat-pulse{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.sf-chat-thinking i{animation:none;opacity:.7}}
