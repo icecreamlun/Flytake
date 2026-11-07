@@ -1,0 +1,10 @@
+{
+ "minX": -2800.0,
+ "minZ": -2800.0,
+ "cellSize": 4.0,
+ "cols": 1601,
+ "rows": 1301,
+ "minElevation": -39.199,
+ "maxElevation": 114.798,
+ "source": "AWS Terrain Tiles (Terrarium z15; USGS 3DEP / NOAA bathymetry), metres NAVD88; OSM coastline land mask; piers flattened to deck level"
+}
