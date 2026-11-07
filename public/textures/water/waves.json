@@ -1,0 +1,12 @@
+{
+ "size": 256,
+ "patch": 24.0,
+ "frames": 64,
+ "period": 8.0,
+ "scale": 3.2,
+ "wind": 4.0,
+ "windDir": [
+  0.8,
+  0.6
+ ]
+}
