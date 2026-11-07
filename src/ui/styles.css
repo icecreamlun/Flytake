@@ -220,6 +220,35 @@ body,
   color: var(--accent);
 }
 
+.fly-field--model {
+  flex: 0 1 auto;
+  padding-right: 16px;
+}
+
+.fly-field--model select {
+  height: 44px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 400 15px/1 var(--sans);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  /* native dropdown arrow is enough; no extra chrome to keep the pill's footprint unchanged */
+}
+
+.fly-field--model select option {
+  color: var(--ink);
+}
+
+.fly-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 10px 0;
+  background: var(--hair);
+  flex: none;
+}
+
 .fly-button {
   display: inline-flex;
   align-items: center;
@@ -715,6 +744,20 @@ body,
   }
   .hint {
     display: none;
+  }
+  .fly-form {
+    flex-wrap: wrap;
+  }
+  .fly-field,
+  .fly-field--model {
+    flex: 1 1 100%;
+  }
+  .fly-divider {
+    display: none;
+  }
+  .fly-button {
+    flex: 1 1 100%;
+    justify-content: center;
   }
 }
 

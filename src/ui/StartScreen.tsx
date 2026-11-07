@@ -22,6 +22,25 @@ const ArrowIcon: FC = () => (
   </svg>
 );
 
+const DroneIcon: FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path
+      d="M7 7 4.5 4.5M17 7l2.5-2.5M7 17l-2.5 2.5M17 17l2.5 2.5"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+    <circle cx="4.5" cy="4.5" r="1.6" fill="currentColor" />
+    <circle cx="19.5" cy="4.5" r="1.6" fill="currentColor" />
+    <circle cx="4.5" cy="19.5" r="1.6" fill="currentColor" />
+    <circle cx="19.5" cy="19.5" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+/** Placeholder lineup for the hackathon demo — only the Mini 4 Pro envelope is simulated so far. */
+const AIRCRAFT_MODELS = ['DJI Mini 4 Pro', 'DJI Air 3', 'DJI Mavic 3 Pro', 'DJI Inspire 3'] as const;
+
 /** Drop keyboard focus so a later Enter / Space cannot re-trigger a hidden control. */
 export function blurActive(): void {
   (document.activeElement as HTMLElement | null)?.blur?.();
@@ -31,7 +50,8 @@ export const StartScreen: FC = () => {
   const phase = useFlytake((s) => s.phase);
   const fly = useFlytake((s) => s.fly);
   const heroReady = useFlytake((s) => s.heroReady);
-  const [query, setQuery] = useState(DESTINATIONS[0]!.label);
+  const [query, setQuery] = useState(SAN_FRANCISCO.label);
+  const [model, setModel] = useState<string>(AIRCRAFT_MODELS[0]);
   const [error, setError] = useState<string | null>(null);
   /** destination clicked while the arrival view was still streaming in */
   const [pending, setPending] = useState<string | null>(null);
@@ -73,10 +93,10 @@ export const StartScreen: FC = () => {
       <div className="start-scrim" />
       <header className="topbar">
         <div className="wordmark">Flytake</div>
-        <div className="caption mono">Emerald Bay · Lake Tahoe · Nov 7</div>
+        <div className="caption mono">Nov 7</div>
       </header>
       <section className="start-panel">
-        <h1 className="tagline">Rehearse your drone shot before you fly.</h1>
+        <h1 className="tagline">Rehearse your imagination before you fly.</h1>
         <form className="fly-form" onSubmit={onSubmit}>
           <label className="fly-field">
             <PinIcon />
@@ -101,6 +121,18 @@ export const StartScreen: FC = () => {
               ))}
             </datalist>
           </label>
+          <span className="fly-divider" aria-hidden="true" />
+          <label className="fly-field fly-field--model">
+            <DroneIcon />
+            <span className="visually-hidden">Aircraft model</span>
+            <select value={model} onChange={(e) => setModel(e.target.value)} tabIndex={visible ? 0 : -1}>
+              {AIRCRAFT_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className="fly-button" tabIndex={visible ? 0 : -1} data-busy={preparing} aria-busy={preparing}>
             {preparing ? 'Preparing' : 'Fly'} <ArrowIcon />
           </button>
@@ -108,9 +140,6 @@ export const StartScreen: FC = () => {
         <p className="start-note" data-error={error != null}>
           {error ?? (preparing ? 'Streaming the arrival view so it lands sharp…' : 'Photorealistic 3D Tiles · physically based atmosphere · real sun position')}
         </p>
-        <a className="start-alt" href={SAN_FRANCISCO.href} tabIndex={visible ? 0 : -1}>
-          Or fly the Ferry Building, San Francisco <ArrowIcon />
-        </a>
       </section>
     </div>
   );
